@@ -1,0 +1,19 @@
+# Overlay that runs the pre-built image CI publishes from this repo's
+# prod.Dockerfile, instead of building from source.
+#
+#   docker compose -f docker-compose.prod.yml -f deploy/docker-compose.image.yml pull
+#   docker compose -f docker-compose.prod.yml -f deploy/docker-compose.image.yml up -d
+#
+# Use this when the machine can't spare the ~8 GB the source build needs
+# (packages/hoppscotch-selfhost-web runs vite with --max_old_space_size=8192).
+# Everything else is identical: all configuration is applied at container
+# start, so the published image reads the same .env.
+#
+# Upgrades become `pull` + `up -d` instead of `build` + `up -d`.
+
+services:
+  hoppscotch:
+    # !reset drops the `build:` block from docker-compose.prod.yml so compose
+    # never tries to build; it only ever pulls.
+    build: !reset null
+    image: hoppscotch/hoppscotch:latest

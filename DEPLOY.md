@@ -22,28 +22,51 @@ Files involved:
 
 - Debian with Docker Engine and the Compose plugin (`docker compose version`)
 - A domain with an A/AAAA record pointing at the server, ports 80 and 443 open
-- **8 GB RAM and ~15 GB free disk to build from source.** The build compiles a Go
-  toolchain, Caddy from source, the native `isolated-vm` addon and both frontend
-  bundles. 4 GB is *not* enough — the selfhost-web Vite build
-  (`prod.Dockerfile:224`, `pnpm run generate`) gets OOM-killed with:
+- **Running it needs ~0.5 GB RAM.** Measured on an idle instance and under a
+  burst of concurrent requests: the app container settles at ~400 MiB and
+  Postgres at ~110 MiB. A 4 GB server runs this comfortably with room for the
+  host Caddy.
+- **Building it from source needs 8 GB available to Docker**, plus ~15 GB disk —
+  far more than running it. `packages/hoppscotch-selfhost-web` builds with
+  `node --max_old_space_size=8192`, so V8 is permitted an 8 GB heap and grows
+  into it rather than collecting early. Give the container less and the kernel
+  kills it partway through, usually with no error message at all:
 
   ```
-  failed to solve: ResourceExhausted: process "/bin/sh -c pnpm run generate"
-  did not complete successfully: cannot allocate memory
+  ELIFECYCLE  Command failed.
+  failed to solve: process "/bin/sh -c pnpm run generate"
+  did not complete successfully: exit code: 1
   ```
 
-  On a smaller server you have two options. Add swap so the peak is absorbed:
+  `NODE_OPTIONS=--max-old-space-size=...` will *not* rein this in: an explicit
+  command-line flag takes precedence over `NODE_OPTIONS`, so the 8192 in the
+  package script wins regardless.
 
-  ```bash
-  sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile
-  sudo mkswap /swapfile && sudo swapon /swapfile
-  ```
+  **On anything under 8 GB, don't build — use the pre-built image below.** That
+  is the normal path, not a fallback; the source build is only worth it if you
+  are modifying Hoppscotch itself.
 
-  Or skip the build entirely and use the image CI publishes from this same
-  Dockerfile — in `docker-compose.prod.yml`, comment out the `build:` block and
-  change `image:` to `hoppscotch/hoppscotch:latest`. Nothing else changes,
-  because all configuration is applied at container start rather than build time.
-  Upgrades then become `docker compose pull && docker compose up -d`.
+## 0. Choose: pre-built image (recommended) or source build
+
+CI publishes the `aio` target of this repo's `prod.Dockerfile` as
+`hoppscotch/hoppscotch`. `deploy/docker-compose.image.yml` overlays the stack to
+use it, so nothing is compiled locally:
+
+```bash
+docker compose -f docker-compose.prod.yml -f deploy/docker-compose.image.yml pull
+docker compose -f docker-compose.prod.yml -f deploy/docker-compose.image.yml up -d
+```
+
+Everything else in this guide applies unchanged — the published image reads the
+same `.env`, because all configuration is applied at container start rather than
+baked in at build time. Upgrades become `pull` + `up -d`.
+
+Set `COMPOSE_FILE=docker-compose.prod.yml:deploy/docker-compose.image.yml` in
+`.env` to make plain `docker compose pull` / `docker compose up -d` use this
+path — then you can drop the `-f` flags from every command below.
+
+To build from source instead (8 GB required), use `docker-compose.prod.yml`
+alone with `build` in place of `pull`, as shown in step 2.
 
 ## 1. Configure
 
@@ -62,28 +85,32 @@ domain.
 grep -c 'hopp\.example\.com' .env   # must print 0 when you're done
 ```
 
-## 2. Build and start
+## 2. Start it
+
+Assuming you set `COMPOSE_FILE` in step 0, so `docker compose` already points at
+the right files:
 
 ```bash
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml ps          # both services -> healthy
+docker compose pull        # or: docker compose build   (source build, 8 GB)
+docker compose up -d
+docker compose ps          # both services -> healthy
 ```
 
 The app container runs `prisma migrate deploy` before starting, so the schema is
-always applied before the backend boots. Nothing publishes to the network yet —
+always applied before the backend boots. Nothing is exposed to the network yet —
 the stack listens on `127.0.0.1:3080` only.
 
-Smoke-test it locally before putting Caddy in front:
+First boot takes a minute or two (migrations, then the Nest bootstrap) and the
+container reports `unhealthy` in the meantime. That is expected; see
+Troubleshooting.
+
+Smoke-test it before putting Caddy in front:
 
 ```bash
-curl -fsS  http://127.0.0.1:3080/backend/ping
-curl -fsSI http://127.0.0.1:3080/       | head -1     # 200
-curl -fsSI http://127.0.0.1:3080/admin/ | head -1     # 200
+curl -fsS  http://127.0.0.1:3080/backend/ping        # Success
+curl -fsSI http://127.0.0.1:3080/       | head -1    # 200  app
+curl -fsSI http://127.0.0.1:3080/admin/ | head -1    # 200  admin dashboard
 ```
-
-Setting `COMPOSE_FILE=docker-compose.prod.yml` in `.env` (it's in the template,
-commented out) lets you drop the `-f` from every command.
 
 ## 3. Put Caddy in front
 
@@ -141,10 +168,12 @@ docker compose -f docker-compose.prod.yml exec -T db \
 gunzip -c hoppscotch-YYYY-MM-DD.sql.gz | \
   docker compose -f docker-compose.prod.yml exec -T db psql -U hoppscotch hoppscotch
 
-# Upgrade
-git pull
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d    # migrations run on start
+# Upgrade (pre-built image)
+docker compose pull
+docker compose up -d                               # migrations run on start
+
+# Upgrade (source build)
+git pull && docker compose build && docker compose up -d
 
 # Database shell
 docker compose -f docker-compose.prod.yml exec db psql -U hoppscotch hoppscotch
