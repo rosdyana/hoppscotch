@@ -1,0 +1,101 @@
+# Production self-host stack for Hoppscotch.
+#
+#   cp deploy/env.prod.example .env    # then edit it: secrets + your domain
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Everything the app needs is in here: the all-in-one container (app + admin
+# dashboard + backend + webapp/bundle server + internal Caddy) and Postgres.
+# Migrations run inside the app container before the app starts.
+#
+# Nothing terminates TLS here. The stack publishes a single port on 127.0.0.1
+# only; put Caddy on the host in front of it (see deploy/Caddyfile.example).
+#
+# See DEPLOY.md for the full runbook.
+
+name: hoppscotch
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    user: postgres
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hoppscotch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see deploy/env.prod.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-hoppscotch}
+    volumes:
+      # Named volume: survives `docker compose down` and container recreation.
+      # `docker compose down -v` DELETES IT. Don't do that on a live instance.
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-hoppscotch} -d ${POSTGRES_DB:-hoppscotch}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # No `ports:` on purpose — Postgres is reachable only on the compose network.
+
+  hoppscotch:
+    build:
+      context: .
+      dockerfile: prod.Dockerfile
+      target: aio
+    # Stable local tag. To skip the (heavy) source build, comment out `build:`
+    # above and set this to `hoppscotch/hoppscotch:latest` instead — nothing
+    # else changes, because all configuration is applied at runtime.
+    image: hoppscotch-aio:local
+    restart: unless-stopped
+    logging: *default-logging
+    env_file:
+      - ./.env
+    environment:
+      # `environment` wins over `env_file`, so the DB credentials have exactly
+      # one source of truth: the POSTGRES_* values above.
+      ENABLE_SUBPATH_BASED_ACCESS: "true"
+      # NOTE: connect_timeout here is in MILLISECONDS, not seconds. The backend
+      # parses it out of the URL and passes it straight to pg's
+      # connectionTimeoutMillis (dist/src/prisma/prisma.service.js). Upstream's
+      # docker-compose.yml uses `connect_timeout=300`, which looks like 300s but
+      # gives the pool 300ms and crash-loops the container on a cold start.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hoppscotch}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-hoppscotch}?connect_timeout=30000
+    depends_on:
+      db:
+        condition: service_healthy
+    # Apply migrations, then hand off to the supervisor. Doing it in-process
+    # means the app can never start against an unmigrated database.
+    command:
+      [
+        "sh",
+        "-c",
+        "pnpm exec prisma migrate deploy && node /usr/src/app/aio_run.mjs",
+      ]
+    volumes:
+      # The webapp-server writes its ed25519 bundle signing key here. Without a
+      # volume it is regenerated on every recreate, invalidating cached bundles.
+      - webapp-server-data:/data/webapp-server
+    ports:
+      # Loopback only. Host Caddy reverse-proxies to this.
+      # In subpath mode the container serves everything on :80 —
+      #   /                     app
+      #   /admin                admin dashboard
+      #   /backend              REST + GraphQL API
+      #   /desktop-app-server   desktop app bundles
+      - "127.0.0.1:3080:80"
+    # The image ships its own HEALTHCHECK (healthcheck.sh), which curls
+    # /backend/ping in subpath mode. No compose-level healthcheck needed.
+
+volumes:
+  db-data:
+  webapp-server-data:

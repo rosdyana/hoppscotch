@@ -1,0 +1,47 @@
+# Host Caddy config for a self-hosted Hoppscotch running from
+# docker-compose.prod.yml. Install as /etc/caddy/Caddyfile on the Debian host,
+# replace hopp.example.com with your domain, then:
+#
+#   caddy validate --config /etc/caddy/Caddyfile
+#   systemctl reload caddy
+#
+# Caddy obtains and renews the TLS certificate automatically, so ports 80 and
+# 443 must be open and the domain's A/AAAA record must point at this server.
+# Nothing else needs to be exposed: the container publishes on 127.0.0.1 only
+# and Postgres publishes nothing at all.
+
+hopp.example.com {
+	encode zstd gzip
+
+	# Collection/environment imports can be large.
+	request_body {
+		max_size 100MB
+	}
+
+	# The container runs in subpath mode, so its internal Caddy already routes
+	# everything behind this one port:
+	#   /                    app
+	#   /admin               admin dashboard
+	#   /backend             REST + GraphQL API
+	#   /desktop-app-server  desktop app bundles
+	#
+	# Caddy forwards X-Forwarded-For / -Proto / -Host by default (pair it with
+	# TRUST_PROXY=true in .env) and upgrades WebSockets transparently, so
+	# GraphQL subscriptions over wss:// need no extra configuration.
+	reverse_proxy 127.0.0.1:3080
+}
+
+# OPTIONAL — mock servers only.
+#
+# The mock server feature routes on a `*.mock.<domain>` Host header. It needs a
+# wildcard DNS record, a wildcard certificate (which requires the DNS-01
+# challenge, so you need a Caddy build that includes your DNS provider module —
+# see https://caddyserver.com/download), and MOCK_SERVER_WILDCARD_DOMAIN set in
+# the admin dashboard. Skip this block if you don't use mock servers.
+#
+# *.mock.hopp.example.com {
+# 	tls {
+# 		dns <your-provider> <credentials>
+# 	}
+# 	reverse_proxy 127.0.0.1:3080
+# }
