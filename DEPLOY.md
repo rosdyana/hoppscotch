@@ -26,11 +26,9 @@ Files involved:
   burst of concurrent requests: the app container settles at ~400 MiB and
   Postgres at ~110 MiB. A 4 GB server runs this comfortably with room for the
   host Caddy.
-- **Building it from source needs 8 GB available to Docker**, plus ~15 GB disk —
-  far more than running it. `packages/hoppscotch-selfhost-web` builds with
-  `node --max_old_space_size=8192`, so V8 is permitted an 8 GB heap and grows
-  into it rather than collecting early. Give the container less and the kernel
-  kills it partway through, usually with no error message at all:
+- **Building from source needs more than 4 GB — the exact figure is unverified.**
+  What is measured: a build with 3.8 GiB available to Docker is OOM-killed
+  partway through, usually with no error message at all:
 
   ```
   ELIFECYCLE  Command failed.
@@ -38,35 +36,48 @@ Files involved:
   did not complete successfully: exit code: 1
   ```
 
-  `NODE_OPTIONS=--max-old-space-size=...` will *not* rein this in: an explicit
-  command-line flag takes precedence over `NODE_OPTIONS`, so the 8192 in the
-  package script wins regardless.
+  `packages/hoppscotch-selfhost-web` builds with `node --max_old_space_size=8192`,
+  so V8 is *permitted* an 8 GB heap. That is a ceiling, not a reservation — the
+  true peak may be well below it, and has not been measured here. Treat 8 GB as
+  a safe upper bound rather than a hard requirement.
 
-  **On anything under 8 GB, don't build — use the pre-built image below.** That
-  is the normal path, not a fallback; the source build is only worth it if you
-  are modifying Hoppscotch itself.
+  Note that `NODE_OPTIONS=--max-old-space-size=...` will not rein this in: an
+  explicit command-line flag takes precedence over `NODE_OPTIONS`, so the 8192
+  in the package script wins. Lowering it means editing that `package.json`.
 
-## 0. Choose: pre-built image (recommended) or source build
+  **Don't build on a small machine — build in CI.** GitHub-hosted runners give
+  16 GB on public repositories, comfortably above the ceiling, and push the
+  result to a registry your server can pull from.
 
-CI publishes the `aio` target of this repo's `prod.Dockerfile` as
-`hoppscotch/hoppscotch`. `deploy/docker-compose.image.yml` overlays the stack to
-use it, so nothing is compiled locally:
+## 0. Choose which image to run
+
+`deploy/docker-compose.image.yml` overlays the stack to run a pre-built image,
+so nothing is compiled locally. `HOPP_IMAGE` in `.env` picks which one:
+
+| `HOPP_IMAGE` | Runs |
+| --- | --- |
+| *(unset — the default)* | `ghcr.io/rosdyana/hoppscotch:latest`, this fork's build |
+| `hoppscotch/hoppscotch:latest` | upstream's stock image, no fork changes |
+| `ghcr.io/rosdyana/hoppscotch:1.0.0` | a pinned release of this fork |
+
+Publishing the fork image is covered in "Building your own image" below. Until
+your first tag exists, set `HOPP_IMAGE=hoppscotch/hoppscotch:latest` to run
+stock upstream.
 
 ```bash
 docker compose -f docker-compose.prod.yml -f deploy/docker-compose.image.yml pull
 docker compose -f docker-compose.prod.yml -f deploy/docker-compose.image.yml up -d
 ```
 
-Everything else in this guide applies unchanged — the published image reads the
-same `.env`, because all configuration is applied at container start rather than
-baked in at build time. Upgrades become `pull` + `up -d`.
-
 Set `COMPOSE_FILE=docker-compose.prod.yml:deploy/docker-compose.image.yml` in
-`.env` to make plain `docker compose pull` / `docker compose up -d` use this
-path — then you can drop the `-f` flags from every command below.
+`.env` (the template already does) and you can drop the `-f` flags everywhere.
 
-To build from source instead (8 GB required), use `docker-compose.prod.yml`
-alone with `build` in place of `pull`, as shown in step 2.
+Everything else in this guide applies unchanged — any of these images reads the
+same `.env`, because all configuration is applied at container start rather than
+baked in at build time.
+
+To build from source instead, use `docker-compose.prod.yml` alone with `build`
+in place of `pull` — but read the memory note in Prerequisites first.
 
 ## 1. Configure
 
@@ -81,9 +92,26 @@ openssl rand -hex 24   # -> POSTGRES_PASSWORD
 Edit `.env`: paste both secrets, then replace every `hopp.example.com` with your
 domain.
 
+Then verify both, before starting anything:
+
 ```bash
-grep -c 'hopp\.example\.com' .env   # must print 0 when you're done
+# must print 0 — no placeholder domains left
+grep -c 'hopp\.example\.com' .env
+
+# must print exactly 32 — see below
+printf '%s' "$(grep '^DATA_ENCRYPTION_KEY=' .env | cut -d= -f2-)" | wc -c
 ```
+
+`DATA_ENCRYPTION_KEY` is used as **raw utf8 bytes** for aes-256-cbc, so it must
+be 32 *characters*, not 32 bytes of entropy. `openssl rand -hex 16` is right;
+`openssl rand -hex 32` gives 64 characters and `openssl rand -base64 32` gives
+44, and both fail at boot with:
+
+```
+RangeError: Invalid key length ... code: 'ERR_CRYPTO_INVALID_KEYLEN'
+```
+
+Quoting the value in `.env` adds two characters and fails the same way.
 
 ## 2. Start it
 
@@ -150,6 +178,43 @@ file`. Back it up alongside your database dumps.
 **`docker compose down -v` deletes your data.** The `-v` removes the `db-data`
 volume and with it every workspace, collection and user. Plain `down` is safe.
 
+## Building your own image (fork development)
+
+If you are adding features to this fork, the upstream image will not contain
+them — you need your own. Build it in CI, not locally.
+
+`.github/workflows/build-fork-image.yml` builds the `aio` target for
+`linux/amd64` and pushes to `ghcr.io/rosdyana/hoppscotch`. It authenticates with
+the automatic `GITHUB_TOKEN`, so there are no secrets to configure.
+
+```bash
+git tag 1.0.0
+git push origin 1.0.0
+```
+
+That publishes `:1.0.0`, `:1.0`, `:latest` and a `:sha-<commit>` tag. You can
+also run it by hand from the Actions tab. Then on the server:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+`HOPP_IMAGE` in `.env` selects which image runs — it defaults to your fork's
+`:latest`. Pin a release with `HOPP_IMAGE=ghcr.io/rosdyana/hoppscotch:1.0.0`, or
+go back to stock with `HOPP_IMAGE=hoppscotch/hoppscotch:latest`.
+
+**One-time GHCR setup.** New GHCR packages are private. Either make the package
+public (repo → Packages → your package → Package settings → Change visibility),
+or authenticate the server with a read-only token:
+
+```bash
+echo <PAT-with-read:packages> | docker login ghcr.io -u rosdyana --password-stdin
+```
+
+**Don't develop against Docker images.** A full image build per change is far
+too slow a loop. Run the app natively with `pnpm dev` against a Postgres
+container while writing code, and use the image build only to deploy.
+
 ## Operating it
 
 ```bash
@@ -180,6 +245,12 @@ docker compose -f docker-compose.prod.yml exec db psql -U hoppscotch hoppscotch
 ```
 
 ## Troubleshooting
+
+**`RangeError: Invalid key length` / `ERR_CRYPTO_INVALID_KEYLEN` at boot.**
+`DATA_ENCRYPTION_KEY` is not 32 characters. Fix it in `.env`, then — only if you
+have not completed onboarding yet — reset with `docker compose down -v && docker
+compose up -d`, because the partial seed left the `InfraConfig` table unusable.
+If you already have real data, restore from a dump instead of using `-v`.
 
 **Frontend can't reach the API / CORS errors in the console.** A `VITE_*` value
 or `WHITELISTED_ORIGINS` still points at `localhost`. The values are inlined

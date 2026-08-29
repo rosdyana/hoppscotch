@@ -52,10 +52,10 @@ services:
       context: .
       dockerfile: prod.Dockerfile
       target: aio
-    # Stable local tag for the source build. To skip the build (it needs 8 GB
-    # of RAM — see DEPLOY.md), layer deploy/docker-compose.image.yml on top to
-    # run the published image instead; nothing else changes, because all
-    # configuration is applied at runtime.
+    # Stable local tag for the source build. The build is memory-hungry and is
+    # OOM-killed on a 4 GB machine (see DEPLOY.md); layer
+    # deploy/docker-compose.image.yml on top to run a pre-built image instead.
+    # Nothing else changes, because all configuration is applied at runtime.
     image: hoppscotch-aio:local
     restart: unless-stopped
     logging: *default-logging
