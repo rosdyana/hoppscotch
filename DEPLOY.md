@@ -211,6 +211,15 @@ or authenticate the server with a read-only token:
 echo <PAT-with-read:packages> | docker login ghcr.io -u rosdyana --password-stdin
 ```
 
+**Upstream's Docker Hub workflow is disabled in this fork.**
+`.github/workflows/release-push-docker.yml` also triggers on `*.*.*` tags and
+pushes to Docker Hub using `DOCKER_USERNAME`/`DOCKER_PASSWORD` secrets this fork
+does not have, so every tag produced a failed run. It is disabled at the repo
+level (Actions tab → the workflow → "..." → Disable workflow, or
+`gh workflow disable 345562841`) rather than by editing the file, so syncing
+from upstream stays conflict-free. Re-enable with `gh workflow enable` if you
+ever add Docker Hub credentials.
+
 **Don't develop against Docker images.** A full image build per change is far
 too slow a loop. Run the app natively with `pnpm dev` against a Postgres
 container while writing code, and use the image build only to deploy.
