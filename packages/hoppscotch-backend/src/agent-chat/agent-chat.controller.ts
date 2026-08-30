@@ -17,10 +17,13 @@ import { ThrottlerBehindProxyGuard } from 'src/guards/throttler-behind-proxy.gua
 import { LlmConfigService } from 'src/llm/llm-config.service';
 import { AuthUser } from 'src/types/AuthUser';
 import { throwHTTPErr } from 'src/utils';
+import { AgentAttachmentService } from './agent-attachment.service';
 import { AgentChatService } from './agent-chat.service';
 import { AgentConversationService } from './agent-conversation.service';
 import {
+  AnswerDto,
   ApprovalDto,
+  CreateAttachmentDto,
   CreateConversationDto,
   FeedbackDto,
   InlineAiDto,
@@ -36,6 +39,7 @@ export class AgentChatController {
     private readonly chat: AgentChatService,
     private readonly conversations: AgentConversationService,
     private readonly inlineAi: InlineAiService,
+    private readonly attachments: AgentAttachmentService,
     private readonly llmConfig: LlmConfigService,
   ) {}
 
@@ -90,6 +94,32 @@ export class AgentChatController {
   }
 
   /**
+   * Store a text file against a conversation.
+   *
+   * The body is JSON rather than multipart because only text is accepted, and
+   * main.ts already parses JSON up to 100 MB.
+   */
+  @Post('conversations/:id/attachments')
+  async createAttachment(
+    @GqlUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CreateAttachmentDto,
+  ) {
+    const result = await this.attachments.create({
+      conversationID: id,
+      userUid: user.uid,
+      filename: dto.filename,
+      mimeType: dto.mimeType,
+      content: dto.content,
+    });
+
+    if (E.isLeft(result)) {
+      throwHTTPErr({ message: result.left, statusCode: 400 });
+    }
+    return (result as E.Right<unknown>).right;
+  }
+
+  /**
    * Stream one assistant turn.
    *
    * SSE rather than a GraphQL subscription: the PubSub is in-memory with no
@@ -117,6 +147,9 @@ export class AgentChatController {
         conversationID: id,
         text: dto.text,
         workspaceId: dto.workspaceId,
+        contextText: dto.contextText,
+        attachmentIds: dto.attachmentIds,
+        autoApprove: dto.autoApprove,
         signal: controller.signal,
         emit: writer.emit,
       });
@@ -150,6 +183,41 @@ export class AgentChatController {
         toolUseId: dto.toolUseId,
         decision: dto.decision,
         workspaceId: dto.workspaceId,
+        autoApprove: dto.autoApprove,
+        signal: controller.signal,
+        emit: writer.emit,
+      });
+    } catch (e) {
+      writer.emit('error', {
+        code: e instanceof Error ? e.message : 'ai/unknown_error',
+      });
+    } finally {
+      writer.close();
+    }
+  }
+
+  @Post('conversations/:id/answers')
+  async answerQuestion(
+    @GqlUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: AnswerDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const writer = new SseWriter(res);
+    writer.open();
+
+    const controller = new AbortController();
+    req.on('close', () => controller.abort());
+
+    try {
+      await this.chat.answerQuestion({
+        user,
+        conversationID: id,
+        toolUseId: dto.toolUseId,
+        answer: dto.answer,
+        workspaceId: dto.workspaceId,
+        autoApprove: dto.autoApprove,
         signal: controller.signal,
         emit: writer.emit,
       });

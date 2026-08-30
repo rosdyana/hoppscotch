@@ -79,6 +79,7 @@ const SettingsDefSchema = z.object({
   HAS_OPENED_SPOTLIGHT: z.optional(z.boolean()),
   ENABLE_AI_EXPERIMENTS: z.optional(z.boolean()),
   ENABLE_AI_CHAT: z.optional(z.boolean()),
+  AI_CHAT_AUTO_APPROVE: z.optional(z.boolean()),
   AI_REQUEST_NAMING_STYLE: z
     .string()
     .optional()

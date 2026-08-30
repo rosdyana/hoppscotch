@@ -75,6 +75,14 @@
     >
       <History :page="'graphql'" />
     </HoppSmartTab>
+    <HoppSmartTab
+      v-if="isAiChatVisible"
+      :id="'ai'"
+      :icon="IconSparkles"
+      :label="`${t('tab.ai')}`"
+    >
+      <AiChatPanel />
+    </HoppSmartTab>
   </HoppSmartTabs>
 </template>
 
@@ -85,8 +93,10 @@ import { useColorMode } from "@composables/theming"
 import { useToast } from "@composables/toast"
 import { copyToClipboard } from "@helpers/utils/clipboard"
 import { refAutoReset } from "@vueuse/core"
-import { reactive, ref } from "vue"
+import { reactive, ref, watch } from "vue"
+import { useAiChatVisibility } from "~/composables/aiChatVisibility"
 import { useNestedSetting } from "~/composables/settings"
+import { defineActionHandler } from "~/helpers/actions"
 import { schemaString } from "~/helpers/graphql/connection"
 import { toggleNestedSetting } from "~/newstore/settings"
 import { platform } from "~/platform"
@@ -98,11 +108,26 @@ import IconCopy from "~icons/lucide/copy"
 import IconDownload from "~icons/lucide/download"
 import IconFolder from "~icons/lucide/folder"
 import IconHelpCircle from "~icons/lucide/help-circle"
+import IconSparkles from "~icons/lucide/sparkles"
 import IconWrapText from "~icons/lucide/wrap-text"
 
-type NavigationTabs = "history" | "collection" | "docs" | "schema"
+type NavigationTabs = "history" | "collection" | "docs" | "schema" | "ai"
 
 const selectedNavigationTab = ref<NavigationTabs>("docs")
+
+const { isAiChatVisible } = useAiChatVisibility()
+
+// An admin can turn AI off server-side mid-session; do not strand the user on
+// a tab that no longer renders.
+watch(isAiChatVisible, (visible) => {
+  if (!visible && selectedNavigationTab.value === "ai") {
+    selectedNavigationTab.value = "docs"
+  }
+})
+
+defineActionHandler("ai.chat.open", () => {
+  if (isAiChatVisible.value) selectedNavigationTab.value = "ai"
+})
 
 const t = useI18n()
 const colorMode = useColorMode()

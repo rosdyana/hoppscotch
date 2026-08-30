@@ -8,6 +8,7 @@ import {
 } from '@hoppscotch/importers';
 import * as E from 'fp-ts/Either';
 import { z } from 'zod';
+import { AgentAttachmentService } from 'src/agent-chat/agent-attachment.service';
 import { TeamCollectionService } from 'src/team-collection/team-collection.service';
 import { TeamRequestService } from 'src/team-request/team-request.service';
 import { ReqType } from 'src/types/RequestTypes';
@@ -31,6 +32,7 @@ export class ImportTools {
     private readonly teamCollectionService: TeamCollectionService,
     private readonly userRequestService: UserRequestService,
     private readonly teamRequestService: TeamRequestService,
+    private readonly attachments: AgentAttachmentService,
   ) {}
 
   build(): AgentTool<any>[] {
@@ -119,6 +121,39 @@ export class ImportTools {
     return E.right(this.countTree(collections));
   }
 
+  /**
+   * Either the inlined content or the stored attachment - never both.
+   *
+   * Enforced here rather than as a Zod refinement because the executor parses
+   * `z.object(tool.input)` from the raw shape, which leaves no place to hang an
+   * object-level check.
+   */
+  private async resolveContent(
+    input: { content?: string; attachmentId?: string },
+    ctx: AgentToolContext,
+  ): Promise<E.Either<string, string>> {
+    if (input.content && input.attachmentId) {
+      return E.left(
+        'Provide either content or attachmentId, not both.',
+      );
+    }
+
+    if (input.attachmentId) {
+      const found = await this.attachments.get(
+        input.attachmentId,
+        ctx.user.uid,
+      );
+      if (E.isLeft(found)) return E.left(found.left);
+      return E.right(found.right.content);
+    }
+
+    if (!input.content) {
+      return E.left('Provide either content or attachmentId.');
+    }
+
+    return E.right(input.content);
+  }
+
   /** Shared shape for every file-based importer. */
   private fileImporter(config: {
     name: string;
@@ -133,7 +168,13 @@ export class ImportTools {
       description: config.description,
       input: {
         workspaceId,
-        content: z.string().min(1).describe(config.contentLabel),
+        content: z.string().min(1).optional().describe(config.contentLabel),
+        attachmentId: z
+          .string()
+          .optional()
+          .describe(
+            'Import a file the user attached to this conversation, by its id from the attachments block. Use this instead of content for anything large - the file is read server-side. Chat only; not available over MCP.',
+          ),
         destinationCollectionId: z
           .string()
           .optional()
@@ -143,8 +184,11 @@ export class ImportTools {
       destructive: false,
       idempotent: false,
       openWorld: false,
-      preview: async (input) => {
-        const parsed = await this.runImporter(config.importer, input.content);
+      preview: async (input, ctx) => {
+        const content = await this.resolveContent(input, ctx);
+        if (E.isLeft(content)) return E.left(content.left);
+
+        const parsed = await this.runImporter(config.importer, content.right);
         if (E.isLeft(parsed)) return E.left(parsed.left);
 
         const counts = this.countTree(parsed.right);
@@ -159,7 +203,10 @@ export class ImportTools {
         });
       },
       execute: async (input, ctx) => {
-        const parsed = await this.runImporter(config.importer, input.content);
+        const content = await this.resolveContent(input, ctx);
+        if (E.isLeft(content)) return E.left(content.left);
+
+        const parsed = await this.runImporter(config.importer, content.right);
         if (E.isLeft(parsed)) return E.left(parsed.left);
 
         return this.persist(ctx, parsed.right, input.destinationCollectionId);

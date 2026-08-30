@@ -146,6 +146,7 @@ model User {
   settings             UserSettings?
   verificationTokens   VerificationToken[]
   agentConversations   AgentConversation[]
+  agentAttachments     AgentAttachment[]
 }
 
 model Account {
@@ -398,8 +399,9 @@ model AgentConversation {
   createdOn     DateTime      @default(now()) @db.Timestamptz(3)
   updatedOn     DateTime      @updatedAt @db.Timestamptz(3)
 
-  user     User           @relation(fields: [userUid], references: [uid], onDelete: Cascade)
-  messages AgentMessage[]
+  user        User              @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+  messages    AgentMessage[]
+  attachments AgentAttachment[]
 
   @@index([userUid, updatedOn])
 }
@@ -420,4 +422,27 @@ model AgentMessage {
   conversation AgentConversation @relation(fields: [conversationID], references: [id], onDelete: Cascade)
 
   @@unique([conversationID, seq])
+}
+
+/// A text file the user attached to a conversation.
+///
+/// Stored server-side on purpose: a Postman export runs to hundreds of KB, and
+/// inlining that into the model's context every turn is both expensive and
+/// unnecessary - the import tools read it here by id instead.
+model AgentAttachment {
+  id             String   @id @default(cuid())
+  conversationID String
+  userUid        String
+  filename       String
+  mimeType       String
+  format         String
+  byteSize       Int
+  content        String
+  createdOn      DateTime @default(now()) @db.Timestamptz(3)
+
+  conversation AgentConversation @relation(fields: [conversationID], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@index([conversationID])
+  @@index([userUid])
 }

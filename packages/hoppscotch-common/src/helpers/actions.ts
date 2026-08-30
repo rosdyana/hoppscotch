@@ -74,6 +74,7 @@ export type HoppAction =
   | "tab.mru-switch-reverse" // Switch to previous MRU tab (Ctrl/Cmd+Alt+[)
   | "request.focus-url" // Focus the URL bar
   | "collection.new" // Create root collection
+  | "ai.chat.open" // Focus the AI assistant tab in the sidebar
   | "flyouts.chat.open" // Shows the keybinds flyout
   | "flyouts.keybinds.toggle" // Shows the keybinds flyout
   | "modals.collection.import" // Shows the collection import modal

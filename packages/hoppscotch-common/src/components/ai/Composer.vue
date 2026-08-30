@@ -1,6 +1,21 @@
 <template>
   <div class="border-t border-divider p-3">
     <div
+      v-if="aiChat.pendingAttachments.value.length > 0"
+      class="mb-2 flex flex-wrap gap-2"
+    >
+      <HoppSmartFileChip
+        v-for="attachment in aiChat.pendingAttachments.value"
+        :key="attachment.localId"
+        class="cursor-pointer"
+        :title="t('ai_chat.attachment_remove')"
+        @click="aiChat.removeAttachment(attachment.localId)"
+      >
+        {{ attachment.filename }}
+      </HoppSmartFileChip>
+    </div>
+
+    <div
       class="flex items-end gap-2 rounded border border-divider bg-primaryLight p-2"
     >
       <textarea
@@ -15,6 +30,14 @@
       />
 
       <HoppButtonSecondary
+        v-tippy="{ theme: 'tooltip' }"
+        :icon="IconPaperclip"
+        :disabled="disabled"
+        :title="t('ai_chat.attach')"
+        @click="pickFiles()"
+      />
+
+      <HoppButtonSecondary
         v-if="streaming"
         :icon="IconSquare"
         :title="t('ai_chat.stop')"
@@ -25,7 +48,7 @@
       <HoppButtonPrimary
         v-else
         :icon="IconSend"
-        :disabled="!draft.trim() || disabled"
+        :disabled="!canSend || disabled"
         :title="t('ai_chat.send')"
         @click="submit"
       />
@@ -34,12 +57,23 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from "vue"
+import { useFileDialog } from "@vueuse/core"
+import { useService } from "dioc/vue"
+import { computed, nextTick, ref, watch } from "vue"
+import IconPaperclip from "~icons/lucide/paperclip"
 import IconSend from "~icons/lucide/send"
 import IconSquare from "~icons/lucide/square"
 import { useI18n } from "@composables/i18n"
+import { useToast } from "@composables/toast"
+import {
+  AiChatService,
+  ATTACHMENT_ACCEPT,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+} from "~/services/ai-chat.service"
 
 const t = useI18n()
+const toast = useToast()
+const aiChat = useService(AiChatService)
 
 const props = defineProps<{ disabled: boolean; streaming: boolean }>()
 const emit = defineEmits<{
@@ -50,6 +84,31 @@ const emit = defineEmits<{
 const draft = ref("")
 const textarea = ref<HTMLTextAreaElement | null>(null)
 
+const canSend = computed(
+  () => !!draft.value.trim() || aiChat.pendingAttachments.value.length > 0
+)
+
+const {
+  files: pickedFiles,
+  open: pickFiles,
+  reset: resetPicker,
+} = useFileDialog({
+  accept: ATTACHMENT_ACCEPT,
+  multiple: true,
+  reset: true,
+})
+
+watch(pickedFiles, async (list) => {
+  if (!list) return
+
+  for (const file of Array.from(list).slice(0, MAX_ATTACHMENTS_PER_MESSAGE)) {
+    const error = await aiChat.addAttachment(file)
+    if (error) toast.error(`${t(`ai_chat.attachment_error_${error}`)}`)
+  }
+
+  resetPicker()
+})
+
 const autoGrow = () => {
   const el = textarea.value
   if (!el) return
@@ -58,10 +117,9 @@ const autoGrow = () => {
 }
 
 const submit = () => {
-  const text = draft.value.trim()
-  if (!text || props.disabled) return
+  if (!canSend.value || props.disabled) return
 
-  emit("send", text)
+  emit("send", draft.value.trim())
   draft.value = ""
   void nextTick(autoGrow)
 }

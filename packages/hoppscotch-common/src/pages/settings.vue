@@ -182,6 +182,17 @@
                   {{ t("settings.enable_ai_chat") }}
                 </HoppSmartToggle>
               </div>
+              <div
+                v-if="aiChatAvailable && ENABLE_AI_CHAT"
+                class="flex items-center"
+              >
+                <HoppSmartToggle
+                  :on="AI_CHAT_AUTO_APPROVE"
+                  @change="toggleSetting('AI_CHAT_AUTO_APPROVE')"
+                >
+                  {{ t("settings.ai_chat_auto_approve") }}
+                </HoppSmartToggle>
+              </div>
               <div class="flex items-center">
                 <HoppSmartToggle
                   :on="ENABLE_EXPERIMENTAL_DOCUMENTATION"
@@ -346,6 +357,7 @@ const EXPERIMENTAL_SCRIPTING_SANDBOX = useSetting(
   "EXPERIMENTAL_SCRIPTING_SANDBOX"
 )
 const ENABLE_AI_CHAT = useSetting("ENABLE_AI_CHAT")
+const AI_CHAT_AUTO_APPROVE = useSetting("AI_CHAT_AUTO_APPROVE")
 const aiChat = useService(AiChatService)
 const aiChatAvailable = computed(() => aiChat.isEnabled.value)
 

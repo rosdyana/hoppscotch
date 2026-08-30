@@ -1,4 +1,5 @@
 import { Module, OnModuleInit } from '@nestjs/common';
+import { AgentAttachmentModule } from 'src/agent-chat/agent-attachment.module';
 import { TeamEnvironmentsModule } from 'src/team-environments/team-environments.module';
 import { TeamCollectionModule } from 'src/team-collection/team-collection.module';
 import { TeamRequestModule } from 'src/team-request/team-request.module';
@@ -12,7 +13,9 @@ import { AgentToolRegistry } from './agent-tool.registry';
 import { CollectionTools } from './tools/collection.tools';
 import { EnvironmentTools } from './tools/environment.tools';
 import { ExecutionTools } from './tools/execution.tools';
+import { AttachmentTools } from './tools/attachment.tools';
 import { ImportTools } from './tools/import.tools';
+import { InteractionTools } from './tools/interaction.tools';
 import { RequestTools } from './tools/request.tools';
 import { WorkspaceTools } from './tools/workspace.tools';
 import { WorkspaceResolverService } from './workspace.resolver';
@@ -32,6 +35,7 @@ import { WorkspaceResolverService } from './workspace.resolver';
     UserEnvironmentsModule,
     TeamEnvironmentsModule,
     RequestRunnerModule,
+    AgentAttachmentModule,
   ],
   providers: [
     AgentToolRegistry,
@@ -43,6 +47,8 @@ import { WorkspaceResolverService } from './workspace.resolver';
     EnvironmentTools,
     ExecutionTools,
     ImportTools,
+    InteractionTools,
+    AttachmentTools,
   ],
   exports: [AgentToolRegistry, AgentToolExecutor, WorkspaceResolverService],
 })
@@ -55,6 +61,8 @@ export class AgentToolsModule implements OnModuleInit {
     private readonly environmentTools: EnvironmentTools,
     private readonly executionTools: ExecutionTools,
     private readonly importTools: ImportTools,
+    private readonly interactionTools: InteractionTools,
+    private readonly attachmentTools: AttachmentTools,
   ) {}
 
   onModuleInit() {
@@ -64,5 +72,7 @@ export class AgentToolsModule implements OnModuleInit {
     this.registry.registerAll(this.environmentTools.build());
     this.registry.registerAll(this.executionTools.build());
     this.registry.registerAll(this.importTools.build());
+    this.registry.registerAll(this.interactionTools.build());
+    this.registry.registerAll(this.attachmentTools.build());
   }
 }

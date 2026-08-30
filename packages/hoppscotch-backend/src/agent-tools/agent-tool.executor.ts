@@ -66,8 +66,33 @@ export class AgentToolExecutor {
       policy,
     };
 
-    // The guardrail: a write under require-approval is previewed, never run.
-    if (!tool.readOnly && policy === 'require-approval') {
+    // An interactive tool never runs: it exists to hand a question back to the
+    // surface, which answers it as an ordinary tool_result.
+    if (tool.interactive) {
+      const input = parsed.data as {
+        question: string;
+        options?: string[];
+        allowFreeText?: boolean;
+      };
+      return {
+        kind: 'question',
+        question: {
+          question: input.question,
+          options: input.options ?? [],
+          allowFreeText: input.allowFreeText ?? true,
+        },
+      };
+    }
+
+    // The guardrail. Under `require-approval` every write is previewed and held;
+    // under `auto-approve` only the destructive ones are. `client-confirms`
+    // (MCP) never holds - the client already confirmed.
+    const needsApproval =
+      !tool.readOnly &&
+      (policy === 'require-approval' ||
+        (policy === 'auto-approve' && tool.destructive));
+
+    if (needsApproval) {
       if (!tool.preview) {
         return this.error(
           `${AI_TOOL_NOT_FOUND}: ${tool.name} has no preview and cannot be confirmed`,

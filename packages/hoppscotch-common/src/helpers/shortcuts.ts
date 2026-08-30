@@ -154,6 +154,11 @@ export function getShortcuts(t: (x: string) => string): ShortcutDef[] {
       label: t("shortcut.navigation.profile"),
       section: t("shortcut.navigation.title"),
     },
+    {
+      keys: [getPlatformAlternateKey(), "A"],
+      label: t("shortcut.navigation.ai_chat"),
+      section: t("shortcut.navigation.title"),
+    },
 
     // Miscellaneous
     {

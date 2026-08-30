@@ -7,6 +7,7 @@ import { useToast } from "@composables/toast"
 import { useI18n } from "@composables/i18n"
 import * as E from "fp-ts/Either"
 import { invokeAction } from "~/helpers/actions"
+import { redactHeaderValue } from "~/helpers/ai/context"
 
 export const useRequestNameGeneration = (targetNameRef: Ref<string>) => {
   const toast = useToast()
@@ -282,10 +283,28 @@ export const useModifyTestScript = (
   }
 }
 
-const buildRequestInfoString = (
+/**
+ * Serializes a request for the AI backend.
+ *
+ * Header *values* that look like credentials are masked before they leave the
+ * browser - the names stay so the model can still reason about how the request
+ * authenticates. (Credentials set through the Authorization tab live in
+ * `request.auth`, which is not serialized here at all.)
+ */
+export const buildRequestInfoString = (
   request: HoppRESTRequest,
-  currentScript: string
+  currentScript: string,
+  options: { redactHeaders?: boolean } = {}
 ) => {
+  const { redactHeaders = true } = options
+
+  const headers = redactHeaders
+    ? request.headers.map((header) => ({
+        ...header,
+        value: redactHeaderValue(header.key, header.value),
+      }))
+    : request.headers
+
   return `
   METHOD:
   ${request.method}
@@ -300,7 +319,7 @@ const buildRequestInfoString = (
   ${JSON.stringify(request.params, null, 2)}
 
   HEADERS:
-  ${JSON.stringify(request.headers, null, 2)}
+  ${JSON.stringify(headers, null, 2)}
   
   EXISTING SCRIPT:
   ${currentScript}

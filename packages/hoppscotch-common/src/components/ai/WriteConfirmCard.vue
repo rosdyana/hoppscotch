@@ -24,16 +24,33 @@
       </div>
     </div>
 
-    <!-- Text-shaped changes get a real diff; structural ones read better as JSON. -->
+    <!-- Text-shaped changes get a real diff; structural ones read better as JSON.
+         The card lives in a ~30% sidebar column, where a side-by-side merge view
+         is unreadable, so it stays folded until asked for. -->
     <div v-if="showDiff" class="border-t border-divider">
-      <AiexperimentsMergeView
-        :content-left="{ content: beforeText, langMime: 'application/json' }"
-        :content-right="{ content: afterText, langMime: 'application/json' }"
-      />
+      <button
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-tiny text-secondaryLight"
+        @click="diffOpen = !diffOpen"
+      >
+        <icon-lucide-chevron-down
+          class="svg-icons transition"
+          :class="{ 'rotate-180': diffOpen }"
+        />
+        {{ diffOpen ? t("ai_chat.hide_diff") : t("ai_chat.view_diff") }}
+      </button>
+      <div
+        v-if="diffOpen"
+        class="max-h-64 overflow-auto border-t border-divider"
+      >
+        <AiexperimentsMergeView
+          :content-left="{ content: beforeText, langMime: 'application/json' }"
+          :content-right="{ content: afterText, langMime: 'application/json' }"
+        />
+      </div>
     </div>
 
     <div
-      class="flex items-center gap-2 border-t border-divider px-3 py-2"
+      class="flex flex-wrap items-center gap-2 border-t border-divider px-3 py-2"
       :class="{ 'opacity-60 pointer-events-none': isBusy }"
     >
       <HoppButtonPrimary
@@ -55,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref } from "vue"
 import { useI18n } from "@composables/i18n"
 import { AiToolCall, AiToolPreview } from "~/services/ai-chat.service"
 
@@ -79,6 +96,8 @@ const preview = computed<AiToolPreview>(
 
 const isDestructive = computed(() => preview.value.warnings.length > 0)
 const isBusy = computed(() => props.call.status === "approving")
+
+const diffOpen = ref(false)
 
 const stringify = (value: unknown) =>
   value === null || value === undefined ? "" : JSON.stringify(value, null, 2)

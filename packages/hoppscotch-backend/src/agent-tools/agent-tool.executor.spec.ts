@@ -70,12 +70,60 @@ const unpreviewableWriteTool = defineTool({
   },
 });
 
+const destructiveWriteTool = defineTool({
+  name: 'destructive_write',
+  title: 'Delete',
+  description: 'delete',
+  input: { id: z.string() },
+  readOnly: false,
+  destructive: true,
+  idempotent: true,
+  openWorld: false,
+  preview: async (input) =>
+    E.right({
+      summary: `Delete ${input.id}`,
+      before: { id: input.id },
+      after: null,
+      warnings: ['This removes 3 requests.'],
+    }),
+  execute: async (input) => {
+    writeSideEffect(input);
+    return E.right({ deleted: input.id });
+  },
+});
+
+const askTool = defineTool({
+  name: 'ask_tool',
+  title: 'Ask',
+  description: 'ask',
+  input: {
+    question: z.string(),
+    options: z.array(z.string()).optional(),
+    allowFreeText: z.boolean().optional().default(true),
+  },
+  readOnly: true,
+  destructive: false,
+  idempotent: true,
+  openWorld: false,
+  interactive: true,
+  execute: async () => {
+    writeSideEffect({});
+    return E.right(true);
+  },
+});
+
 let executor: AgentToolExecutor;
 
 beforeEach(() => {
   jest.clearAllMocks();
   const registry = new AgentToolRegistry();
-  registry.registerAll([readTool, writeTool, unpreviewableWriteTool]);
+  registry.registerAll([
+    readTool,
+    writeTool,
+    unpreviewableWriteTool,
+    destructiveWriteTool,
+    askTool,
+  ]);
   executor = new AgentToolExecutor(
     registry,
     new WorkspaceResolverService(mockTeamService),
@@ -255,6 +303,75 @@ describe('AgentToolExecutor', () => {
       kind: 'result',
       content: 'kaboom',
       isError: true,
+    });
+  });
+
+  describe('auto-approve policy', () => {
+    it('should run an ordinary write without asking', async () => {
+      const result = await run({
+        name: 'write_tool',
+        input: { title: 'new' },
+        policy: 'auto-approve',
+      });
+
+      expect(result).toEqual({
+        kind: 'result',
+        content: JSON.stringify({ renamed: 'new' }),
+        isError: false,
+      });
+      expect(writeSideEffect).toHaveBeenCalledWith({ title: 'new' });
+    });
+
+    it('should still hold a destructive write for confirmation', async () => {
+      const result = await run({
+        name: 'destructive_write',
+        input: { id: 'coll-1' },
+        policy: 'auto-approve',
+      });
+
+      expect(result.kind).toBe('proposal');
+      // The whole point: the underlying service is never reached.
+      expect(writeSideEffect).not.toHaveBeenCalled();
+    });
+
+    it('should leave MCP unchanged - client-confirms still executes', async () => {
+      const result = await run({
+        name: 'destructive_write',
+        input: { id: 'coll-1' },
+        policy: 'client-confirms',
+      });
+
+      expect(result.kind).toBe('result');
+      expect(writeSideEffect).toHaveBeenCalledWith({ id: 'coll-1' });
+    });
+  });
+
+  describe('interactive tools', () => {
+    it('should hand back a question instead of executing', async () => {
+      const result = await run({
+        name: 'ask_tool',
+        input: { question: 'Which collection?', options: ['A', 'B'] },
+      });
+
+      expect(result).toEqual({
+        kind: 'question',
+        question: {
+          question: 'Which collection?',
+          options: ['A', 'B'],
+          allowFreeText: true,
+        },
+      });
+      expect(writeSideEffect).not.toHaveBeenCalled();
+    });
+
+    it('should ask even under auto-approve', async () => {
+      const result = await run({
+        name: 'ask_tool',
+        input: { question: 'Which one?' },
+        policy: 'auto-approve',
+      });
+
+      expect(result.kind).toBe('question');
     });
   });
 });

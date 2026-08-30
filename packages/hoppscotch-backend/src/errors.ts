@@ -1047,6 +1047,26 @@ export const AI_CONVERSATION_NOT_FOUND = 'ai/conversation_not_found' as const;
 export const AI_APPROVAL_NOT_PENDING = 'ai/approval_not_pending' as const;
 
 /**
+ * Attachment does not exist or is not owned by the user
+ * (AgentAttachmentService)
+ */
+export const AI_ATTACHMENT_NOT_FOUND = 'ai/attachment_not_found' as const;
+
+/**
+ * Attachment is larger than the per-file cap
+ * (AgentAttachmentService)
+ */
+export const AI_ATTACHMENT_TOO_LARGE = 'ai/attachment_too_large' as const;
+
+/**
+ * Attachment is not text, or the conversation is already at its file limit
+ * (AgentAttachmentService)
+ */
+export const AI_ATTACHMENT_NOT_TEXT = 'ai/attachment_not_text' as const;
+export const AI_ATTACHMENT_LIMIT_REACHED =
+  'ai/attachment_limit_reached' as const;
+
+/**
  * The model requested a tool that is not in the registry
  * (AgentToolExecutor)
  */

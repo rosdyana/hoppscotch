@@ -9,12 +9,25 @@
     </div>
 
     <div class="min-w-0 flex-1">
-      <p
-        v-if="message.role === 'user'"
-        class="whitespace-pre-wrap text-secondaryDark"
-      >
-        {{ message.content }}
-      </p>
+      <template v-if="message.role === 'user'">
+        <p
+          v-if="message.content"
+          class="whitespace-pre-wrap text-secondaryDark"
+        >
+          {{ message.content }}
+        </p>
+        <div
+          v-if="message.attachments?.length"
+          class="mt-1 flex flex-wrap gap-2"
+        >
+          <HoppSmartFileChip
+            v-for="attachment in message.attachments"
+            :key="attachment.id"
+          >
+            {{ attachment.filename }}
+          </HoppSmartFileChip>
+        </div>
+      </template>
 
       <template v-else>
         <AiMarkdown v-if="message.content" :source="message.content" />
@@ -27,8 +40,13 @@
         </span>
 
         <template v-for="call in message.toolCalls" :key="call.id">
+          <AiQuestionCard
+            v-if="call.status === 'awaiting-input'"
+            :call="call"
+            @answer="onAnswer"
+          />
           <AiWriteConfirmCard
-            v-if="
+            v-else-if="
               call.status === 'awaiting-approval' || call.status === 'approving'
             "
             :call="call"
@@ -52,5 +70,10 @@ defineProps<{ message: AiChatMessage }>()
 const emit = defineEmits<{
   (e: "approve", id: string): void
   (e: "reject", id: string): void
+  (e: "answer", id: string, answer: string): void
 }>()
+
+// A named handler rather than an inline arrow: a template arrow loses the
+// emit signature and both parameters fall back to `any`.
+const onAnswer = (id: string, answer: string) => emit("answer", id, answer)
 </script>

@@ -41,6 +41,10 @@ export class McpServerFactory {
     ) => void;
 
     for (const tool of this.registry.list()) {
+      // Interactive tools put a question to a human. MCP has no channel to
+      // answer one, so the client would receive a question it cannot act on.
+      if (tool.interactive) continue;
+
       registerTool(
         tool.name,
         {
@@ -76,6 +80,20 @@ export class McpServerFactory {
                 {
                   type: 'text' as const,
                   text: `This action needs confirmation: ${result.proposal.summary}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          if (result.kind === 'question') {
+            // Interactive tools are filtered out of this server, so reaching
+            // here means the registry and the filter drifted apart.
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `This tool needs a human answer and is not available over MCP: ${result.question.question}`,
                 },
               ],
               isError: true,

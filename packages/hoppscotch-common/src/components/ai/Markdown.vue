@@ -70,6 +70,8 @@ const rendered = computed(() =>
 
   :deep(table) {
     @apply my-2 w-full;
+    // A wide table must scroll inside the sidebar column rather than stretch it.
+    @apply block overflow-x-auto;
 
     th,
     td {

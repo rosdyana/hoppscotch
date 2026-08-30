@@ -12,8 +12,10 @@
         class="svg-icons flex-shrink-0"
         :class="statusClass"
       />
-      <span class="font-mono text-secondaryDark">{{ call.name }}</span>
-      <span class="ml-auto text-secondaryLight">{{ statusLabel }}</span>
+      <span class="truncate font-mono text-secondaryDark">{{ call.name }}</span>
+      <span class="ml-auto flex-shrink-0 text-secondaryLight">{{
+        statusLabel
+      }}</span>
       <icon-lucide-chevron-down
         class="svg-icons transition"
         :class="{ 'rotate-180': expanded }"
@@ -21,7 +23,7 @@
     </button>
 
     <div v-if="expanded && call.args" class="border-t border-divider px-3 py-2">
-      <pre class="overflow-x-auto font-mono text-secondaryLight">{{
+      <pre class="max-h-64 overflow-auto font-mono text-secondaryLight">{{
         JSON.stringify(call.args, null, 2)
       }}</pre>
     </div>

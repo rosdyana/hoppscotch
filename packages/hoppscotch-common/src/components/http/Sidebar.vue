@@ -90,6 +90,14 @@
       </div>
       <MockServerDashboard v-if="selectedNavigationTab === 'mock-servers'" />
     </HoppSmartTab>
+    <HoppSmartTab
+      v-if="isAiChatVisible"
+      :id="'ai'"
+      :icon="IconSparkles"
+      :label="`${t('tab.ai')}`"
+    >
+      <AiChatPanel />
+    </HoppSmartTab>
   </HoppSmartTabs>
   <!-- Share hosts the app's only `share.request` action handler (and its
        modals). When its sidebar tab is hidden for non-request tabs, keep one
@@ -110,12 +118,15 @@ import IconFolder from "~icons/lucide/folder"
 import IconShare2 from "~icons/lucide/share-2"
 import IconCode from "~icons/lucide/code"
 import IconServer from "~icons/lucide/server"
+import IconSparkles from "~icons/lucide/sparkles"
 import { computed, ref, watch } from "vue"
 import { useI18n } from "@composables/i18n"
+import { defineActionHandler } from "~/helpers/actions"
 import { useService } from "dioc/vue"
 import MockServerDashboard from "~/components/mockServer/MockServerDashboard.vue"
 import { useMockServerWorkspaceSync } from "~/composables/mockServerWorkspace"
 import { useMockServerVisibility } from "~/composables/mockServerVisibility"
+import { useAiChatVisibility } from "~/composables/aiChatVisibility"
 import { useGqlWorkspaceVisibility } from "~/composables/gqlWorkspaceVisibility"
 import { GQLTabConnectionService } from "~/services/gql-tab-connection.service"
 import { WorkspaceTabsService } from "~/services/tab/workspace-tabs"
@@ -128,6 +139,7 @@ const gqlTabConn = useService(GQLTabConnectionService)
 const activeGQLTabId = gqlTabConn.activeGQLTabId
 
 const { isMockServerVisible } = useMockServerVisibility()
+const { isAiChatVisible } = useAiChatVisibility()
 const { isGqlWorkspaceEnabled } = useGqlWorkspaceVisibility()
 
 const activeDocType = computed(() => tabs.currentActiveTab.value?.document.type)
@@ -150,6 +162,7 @@ type RequestOptionTabs =
   | "share-request"
   | "codegen"
   | "mock-servers"
+  | "ai"
 
 const selectedNavigationTab = ref<RequestOptionTabs>("collections")
 
@@ -170,6 +183,18 @@ watch([isGQLTab, isRequestBearingTab], ([nowGQL, requestBearing]) => {
   ) {
     selectedNavigationTab.value = "collections"
   }
+})
+
+// An admin can turn AI off server-side mid-session; do not strand the user on
+// a tab that no longer renders.
+watch(isAiChatVisible, (visible) => {
+  if (!visible && selectedNavigationTab.value === "ai") {
+    selectedNavigationTab.value = "collections"
+  }
+})
+
+defineActionHandler("ai.chat.open", () => {
+  if (isAiChatVisible.value) selectedNavigationTab.value = "ai"
 })
 
 // Ensure mock servers are kept in sync with workspace changes globally

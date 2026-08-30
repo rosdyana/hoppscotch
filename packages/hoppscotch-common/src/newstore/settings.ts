@@ -75,6 +75,7 @@ export type SettingsDef = {
   HAS_OPENED_SPOTLIGHT: boolean
   ENABLE_AI_EXPERIMENTS: boolean
   ENABLE_AI_CHAT: boolean
+  AI_CHAT_AUTO_APPROVE: boolean
   AI_REQUEST_NAMING_STYLE:
     | "DESCRIPTIVE_WITH_SPACES"
     | "camelCase"
@@ -141,6 +142,7 @@ export const getDefaultSettings = (): SettingsDef => {
     HAS_OPENED_SPOTLIGHT: false,
     ENABLE_AI_EXPERIMENTS: true,
     ENABLE_AI_CHAT: true,
+    AI_CHAT_AUTO_APPROVE: false,
     AI_REQUEST_NAMING_STYLE: "DESCRIPTIVE_WITH_SPACES",
     CUSTOM_NAMING_STYLE: "",
 

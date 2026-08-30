@@ -84,6 +84,7 @@ const baseBindings: {
   "alt-d": "navigation.jump.documentation",
   "alt-s": "navigation.jump.settings",
   "alt-m": "navigation.jump.profile",
+  "alt-a": "ai.chat.open",
   "ctrl-shift-p": "response.preview.toggle",
   "ctrl-j": "response.file.download",
   "ctrl-.": "response.copy",
