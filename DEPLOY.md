@@ -286,6 +286,34 @@ listening. Only worry if it is still unhealthy after ~5 minutes.
 logs hoppscotch`. The migration step runs first, so a database connection problem
 shows up there before the app logs anything.
 
+**`Error: P3009 - migrate found failed migrations in the target database`.**
+A migration started and did not finish - most often because the disk filled
+underneath it (see the entry below). Prisma records the failure and refuses to
+apply anything further until you clear it. Retrying never resolves this; the
+app's retry loop gives up after five minutes so it does not scroll past.
+
+Postgres DDL is transactional, so a migration that failed part-way is almost
+always fully rolled back. Confirm rather than assume - the migration name is in
+the error:
+
+```bash
+docker compose -f docker-compose.prod.yml exec db \
+  psql -U hoppscotch -d hoppscotch -c "SELECT to_regclass('public.\"AgentAttachment\"');"
+```
+
+Empty result - nothing was applied. Mark it rolled back and the next retry
+replays it from scratch:
+
+```bash
+docker compose -f docker-compose.prod.yml exec hoppscotch \
+  pnpm exec prisma migrate resolve --rolled-back 20260830140000_agent_attachments
+```
+
+If the object *does* exist, do not reach for `--resolve --applied`: indexes and
+foreign keys from later in the same file may be missing, and marking it applied
+freezes that half-built schema in place permanently. Drop the objects the
+migration creates, then use `--rolled-back` as above so it replays whole.
+
 **`PANIC: could not write to file "pg_logical/replorigin_checkpoint.tmp": No
 space left on device`, looping every second.** The disk is full. Nothing is
 corrupt and no data is lost - Postgres PANICs here deliberately, precisely to

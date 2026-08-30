@@ -83,12 +83,28 @@ services:
     # replaying WAL - the app returns first, `migrate deploy` fails against a
     # database still in recovery, the container exits, and the two crash-loop
     # past each other. Waiting here instead costs nothing on a healthy start.
+    #
+    # Bounded, because not every failure is transient: a migration recorded as
+    # failed (Prisma P3009) needs `migrate resolve` by hand and will never
+    # succeed on its own. Retrying forever would hide that behind a scrolling
+    # log. Prisma's own output is above each retry line - read it.
+    #
+    # `$$` escapes compose's variable interpolation, so the shell sees `$`.
     command:
-      [
-        "sh",
-        "-c",
-        "until pnpm exec prisma migrate deploy; do echo 'database not ready (starting up or recovering) - retrying in 5s'; sleep 5; done && node /usr/src/app/aio_run.mjs",
-      ]
+      - sh
+      - -c
+      - |
+        attempts=0
+        until pnpm exec prisma migrate deploy; do
+          attempts=$$((attempts + 1))
+          if [ "$$attempts" -ge 60 ]; then
+            echo "migrate deploy still failing after 5 minutes - giving up so this is visible rather than looping silently. See the troubleshooting section of DEPLOY.md."
+            exit 1
+          fi
+          echo "migrate deploy failed (attempt $$attempts/60) - retrying in 5s. If the error above is P3009 this will never succeed; resolve it by hand."
+          sleep 5
+        done
+        exec node /usr/src/app/aio_run.mjs
     volumes:
       # The webapp-server writes its ed25519 bundle signing key here. Without a
       # volume it is regenerated on every recreate, invalidating cached bundles.
