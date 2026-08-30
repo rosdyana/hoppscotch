@@ -145,6 +145,7 @@ model User {
   userRequests         UserRequest[]
   settings             UserSettings?
   verificationTokens   VerificationToken[]
+  agentConversations   AgentConversation[]
 }
 
 model Account {
@@ -379,4 +380,44 @@ model PublishedDocs {
 
   @@unique([slug, version])
   @@index([collectionID])
+}
+
+/// A conversation with the AI assistant.
+///
+/// Persisted rather than kept in memory because the write-approval protocol
+/// spans an HTTP round trip: between the model proposing a write and the user
+/// approving it, an unrelated infra-config save can SIGTERM the process.
+model AgentConversation {
+  id            String        @id @default(cuid())
+  userUid       String
+  title         String
+  workspaceType WorkspaceType @default(USER)
+  teamID        String?
+  provider      String
+  model         String
+  createdOn     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedOn     DateTime      @updatedAt @db.Timestamptz(3)
+
+  user     User           @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+  messages AgentMessage[]
+
+  @@index([userUid, updatedOn])
+}
+
+/// One turn in a conversation.
+///
+/// `content` holds provider-native blocks verbatim, tagged with `provider`, so
+/// Anthropic thinking blocks and tool_use blocks survive a replay unchanged.
+model AgentMessage {
+  id             String   @id @default(cuid())
+  conversationID String
+  role           String
+  provider       String?
+  content        Json
+  seq            Int
+  createdOn      DateTime @default(now()) @db.Timestamptz(3)
+
+  conversation AgentConversation @relation(fields: [conversationID], references: [id], onDelete: Cascade)
+
+  @@unique([conversationID, seq])
 }

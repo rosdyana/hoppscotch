@@ -1,0 +1,6 @@
+mutation UpdateAIConfigs($aiConfigs: [InfraConfigArgs!]!) {
+  updateAIConfigs(aiConfigs: $aiConfigs) {
+    name
+    value
+  }
+}

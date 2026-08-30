@@ -990,3 +990,125 @@ export const PUBLISHED_DOCS_FORBIDDEN_ENVIRONMENT_ACCESS =
  * (PublishedDocsService)
  */
 export const PUBLISHED_DOCS_NOT_FOUND = 'published_docs/not_found';
+
+/**
+ * AI features are not enabled by the instance admin
+ * (LlmConfigService)
+ */
+export const AI_NOT_ENABLED = 'ai/not_enabled' as const;
+
+/**
+ * AI is enabled but the provider credentials are incomplete
+ * (LlmConfigService)
+ */
+export const AI_NOT_CONFIGURED = 'ai/not_configured' as const;
+
+/**
+ * The configured LLM provider rejected our credentials
+ * (LlmService)
+ */
+export const AI_PROVIDER_AUTH_FAILED = 'ai/provider_auth_failed' as const;
+
+/**
+ * The configured LLM provider rate limited the request
+ * (LlmService)
+ */
+export const AI_PROVIDER_RATE_LIMITED = 'ai/provider_rate_limited' as const;
+
+/**
+ * The configured LLM provider returned an error
+ * (LlmService)
+ */
+export const AI_PROVIDER_REQUEST_FAILED = 'ai/provider_request_failed' as const;
+
+/**
+ * The configured LLM provider could not be reached
+ * (LlmService)
+ */
+export const AI_PROVIDER_UNAVAILABLE = 'ai/provider_unavailable' as const;
+
+/**
+ * The agent loop exceeded AI_MAX_TOOL_ITERATIONS
+ * (AgentChatService)
+ */
+export const AI_MAX_TOOL_ITERATIONS_EXCEEDED =
+  'ai/max_tool_iterations_exceeded' as const;
+
+/**
+ * Conversation does not exist or is not owned by the user
+ * (AgentConversationService)
+ */
+export const AI_CONVERSATION_NOT_FOUND = 'ai/conversation_not_found' as const;
+
+/**
+ * No pending approval matches the supplied tool use ID
+ * (AgentChatService)
+ */
+export const AI_APPROVAL_NOT_PENDING = 'ai/approval_not_pending' as const;
+
+/**
+ * The model requested a tool that is not in the registry
+ * (AgentToolExecutor)
+ */
+export const AI_TOOL_NOT_FOUND = 'ai/tool_not_found' as const;
+
+/**
+ * Tool input failed schema validation
+ * (AgentToolExecutor)
+ */
+export const AI_TOOL_INPUT_INVALID = 'ai/tool_input_invalid' as const;
+
+/**
+ * The user may not invoke this tool in this workspace
+ * (AgentToolExecutor)
+ */
+export const AI_TOOL_FORBIDDEN = 'ai/tool_forbidden' as const;
+
+/**
+ * Workspace does not exist or the user is not a member
+ * (WorkspaceResolverService)
+ */
+export const AI_WORKSPACE_NOT_FOUND = 'ai/workspace_not_found' as const;
+
+/**
+ * The user's role in this workspace does not permit the operation
+ * (WorkspaceResolverService)
+ */
+export const AI_WORKSPACE_FORBIDDEN = 'ai/workspace_forbidden' as const;
+
+/**
+ * An AI config key was supplied that is not an AI config key
+ * (InfraConfigService)
+ */
+export const AI_CONFIG_INVALID_KEY = 'ai/config_invalid_key' as const;
+
+/**
+ * Outbound request execution is disabled by the instance admin
+ * (RequestRunnerService)
+ */
+export const AGENT_REQUEST_EXECUTION_DISABLED =
+  'agent/request_execution_disabled' as const;
+
+/**
+ * The target host is blocked by the egress policy
+ * (SsrfGuardService)
+ */
+export const AGENT_REQUEST_HOST_BLOCKED = 'agent/request_host_blocked' as const;
+
+/**
+ * The outbound request exceeded AGENT_REQUEST_TIMEOUT_MS
+ * (RequestRunnerService)
+ */
+export const AGENT_REQUEST_TIMEOUT = 'agent/request_timeout' as const;
+
+/**
+ * The response exceeded AGENT_REQUEST_MAX_RESPONSE_BYTES
+ * (RequestRunnerService)
+ */
+export const AGENT_RESPONSE_TOO_LARGE = 'agent/response_too_large' as const;
+
+/**
+ * The MCP server is not enabled by the instance admin
+ * (McpController)
+ */
+export const MCP_NOT_ENABLED = 'mcp/not_enabled' as const;

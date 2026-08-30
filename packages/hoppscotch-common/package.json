@@ -38,6 +38,7 @@
     "@hoppscotch/codemirror-lang-graphql": "workspace:^",
     "@hoppscotch/data": "workspace:^",
     "@hoppscotch/httpsnippet": "3.0.9",
+    "@hoppscotch/importers": "workspace:^",
     "@hoppscotch/js-sandbox": "workspace:^",
     "@hoppscotch/kernel": "workspace:^",
     "@hoppscotch/plugin-appload": "github:CuriousCorrelation/tauri-plugin-appload#7c5d9c23b73f2d22bed4c3198f36e2cfd5799a33",

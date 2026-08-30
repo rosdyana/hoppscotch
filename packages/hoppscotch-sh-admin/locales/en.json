@@ -148,7 +148,8 @@
       "rate_limit": "Rate Limit",
       "smtp": "SMTP",
       "miscellaneous": "Miscellaneous",
-      "reset": "Reset Configurations"
+      "reset": "Reset Configurations",
+      "ai": "AI"
     },
     "title": "Configurations",
     "mock_server": {
@@ -161,7 +162,46 @@
       "subpath_content_type_text_plain": "text/plain",
       "subpath_content_type_notice_suffix": "to help prevent XSS attacks:"
     },
-    "update_failure": "Failed to update server configurations"
+    "update_failure": "Failed to update server configurations",
+    "ai": {
+      "title": "AI & MCP",
+      "description": "Configure the LLM vendor that powers the in-app assistant and the MCP server. Credentials stay on the server and are never sent to the browser.",
+      "enable": "Enable AI features",
+      "enable_description": "Turns on the in-app assistant for every signed-in user. Requests are billed to the configured Azure resource.",
+      "provider": "Provider",
+      "provider_foundry": "Azure AI Foundry (Claude)",
+      "provider_openai": "Azure OpenAI",
+      "foundry_title": "Azure AI Foundry",
+      "foundry_resource": "Resource host",
+      "foundry_resource_description": "The bare hostname of your Foundry resource, without https:// and without a path.",
+      "openai_title": "Azure OpenAI",
+      "openai_endpoint": "Endpoint",
+      "openai_deployment": "Deployment name",
+      "openai_api_version": "API version",
+      "api_key": "API key",
+      "api_key_description": "Leave the masked value untouched to keep the existing key.",
+      "model": "Model",
+      "advanced_title": "Advanced",
+      "max_output_tokens": "Max output tokens",
+      "max_tool_iterations": "Max tool iterations",
+      "enable_thinking": "Enable extended thinking",
+      "enable_thinking_description": "Adaptive thinking is in beta on Microsoft Foundry. Leave this off unless you have confirmed your deployment supports it.",
+      "mcp_title": "MCP server",
+      "mcp_enable": "Enable the MCP endpoint",
+      "mcp_description": "Lets coding agents such as Claude Code drive this Hoppscotch instance. Agents authenticate with a personal access token created from the app.",
+      "mcp_connect_hint": "Connect an agent with:",
+      "execution_title": "Request execution",
+      "execution_enable": "Allow the assistant to send HTTP requests",
+      "execution_warning": "This is the only feature that makes the server issue outbound HTTP requests. Private, loopback and cloud metadata addresses are always blocked, but you should still set an allow-list in production.",
+      "allowed_hosts": "Allowed hosts",
+      "allowed_hosts_description": "Comma separated. Supports a leading wildcard, for example *.internal.dev. Leave empty to allow any public host.",
+      "timeout_ms": "Timeout (ms)",
+      "max_response_bytes": "Max response size (bytes)",
+      "save": "Save AI settings",
+      "save_hint": "Saving these does not restart the server.",
+      "save_success": "AI settings saved",
+      "update_failure": "Failed to update AI settings"
+    }
   },
   "data_sharing": {
     "description": "Share anonymous data usage to improve Hoppscotch",

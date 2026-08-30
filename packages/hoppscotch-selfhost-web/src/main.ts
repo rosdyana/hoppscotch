@@ -19,6 +19,7 @@ import { def as desktopInstance } from "@app/platform/instance/desktop"
 import { stdFooterItems } from "@hoppscotch/common/platform/std/ui/footerItem"
 import { stdSupportOptionItems } from "@hoppscotch/common/platform/std/ui/supportOptionsItem"
 import { InfraPlatform } from "@app/platform/infra/infra.platform"
+import { ExperimentsPlatform } from "@app/platform/experiments/experiments.platform"
 import { historySyncDef } from "@app/platform/history/sync"
 import { kernelIO } from "@hoppscotch/common/platform/std/kernel-io"
 import { HeaderDownloadableLinksService } from "@app/services/headerDownloadableLinks.service"
@@ -190,6 +191,7 @@ async function initApp() {
     },
 
     infra: InfraPlatform,
+    experiments: ExperimentsPlatform,
     backend: stdBackendDef,
     additionalLinks: [HeaderDownloadableLinksService],
     addedServices: [],

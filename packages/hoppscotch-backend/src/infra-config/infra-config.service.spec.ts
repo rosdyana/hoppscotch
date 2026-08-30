@@ -1,8 +1,14 @@
 import { mockDeep, mockReset } from 'jest-mock-extended';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { InfraConfigService } from './infra-config.service';
-import { InfraConfigEnum } from 'src/types/InfraConfig';
 import {
+  AI_SECRET_MASK,
+  AIProvider,
+  InfraConfigEnum,
+} from 'src/types/InfraConfig';
+import {
+  AI_CONFIG_INVALID_KEY,
+  AI_NOT_CONFIGURED,
   INFRA_CONFIG_INVALID_INPUT,
   INFRA_CONFIG_NOT_FOUND,
   INFRA_CONFIG_OPERATION_NOT_ALLOWED,
@@ -563,6 +569,161 @@ describe('InfraConfigService', () => {
         await infraConfigService.getOnboardingConfig(RECOVERY_TOKEN);
 
       expect(result).toEqualLeft(INFRA_CONFIG_NOT_FOUND);
+    });
+  });
+  describe('AI configuration', () => {
+    const aiRow = (name: InfraConfigEnum, value: string | null, enc = false) =>
+      ({
+        id: name,
+        name,
+        value,
+        lastSyncedEnvFileValue: null,
+        isEncrypted: enc,
+        createdOn: INITIALIZED_DATE_CONST,
+        updatedOn: INITIALIZED_DATE_CONST,
+      }) as dbInfraConfig;
+
+    describe('updateMany', () => {
+      it('should refuse AI keys so they cannot trigger a server restart', async () => {
+        const result = await infraConfigService.updateMany([
+          { name: InfraConfigEnum.AI_ENABLED, value: 'true' },
+        ]);
+
+        expect(result).toEqualLeft(INFRA_CONFIG_OPERATION_NOT_ALLOWED);
+      });
+    });
+
+    describe('updateAIConfigs', () => {
+      it('should refuse keys that are not AI config keys', async () => {
+        const result = await infraConfigService.updateAIConfigs([
+          { name: InfraConfigEnum.GOOGLE_CLIENT_ID, value: 'nope' },
+        ]);
+
+        expect(result).toEqualLeft(AI_CONFIG_INVALID_KEY);
+      });
+
+      it('should reject an invalid provider', async () => {
+        const result = await infraConfigService.updateAIConfigs([
+          { name: InfraConfigEnum.AI_PROVIDER, value: 'NOT_A_PROVIDER' },
+        ]);
+
+        expect(result).toEqualLeft(INFRA_CONFIG_INVALID_INPUT);
+      });
+
+      it('should reject a Foundry resource given as a URL rather than a bare host', async () => {
+        const result = await infraConfigService.updateAIConfigs([
+          {
+            name: InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE,
+            value: 'https://demo.azure.anthropic.com',
+          },
+        ]);
+
+        expect(result).toEqualLeft(INFRA_CONFIG_INVALID_INPUT);
+      });
+
+      it('should reject enabling AI while credentials are missing', async () => {
+        mockPrisma.infraConfig.findMany.mockResolvedValueOnce([
+          aiRow(InfraConfigEnum.AI_PROVIDER, AIProvider.AZURE_FOUNDRY_ANTHROPIC),
+          aiRow(InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE, null),
+          aiRow(InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY, null, true),
+          aiRow(InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL, 'claude-opus-5'),
+          aiRow(InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT, null),
+          aiRow(InfraConfigEnum.AI_AZURE_OPENAI_API_KEY, null, true),
+          aiRow(InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT, null),
+        ]);
+
+        const result = await infraConfigService.updateAIConfigs([
+          { name: InfraConfigEnum.AI_ENABLED, value: 'true' },
+        ]);
+
+        expect(result).toEqualLeft(AI_NOT_CONFIGURED);
+      });
+
+      it('should not persist the mask when a secret is left unchanged', async () => {
+        mockPrisma.infraConfig.findMany.mockResolvedValueOnce([]);
+        const updateSpy = jest
+          .spyOn(infraConfigService, 'update')
+          .mockResolvedValue(
+            E.right(<InfraConfig>{
+              name: InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+              value: 'claude-opus-5',
+            }),
+          );
+
+        const result = await infraConfigService.updateAIConfigs([
+          { name: InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY, value: AI_SECRET_MASK },
+          { name: InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL, value: 'claude-opus-5' },
+        ]);
+
+        expect(E.isRight(result)).toBe(true);
+        expect(updateSpy).toHaveBeenCalledTimes(1);
+        expect(updateSpy).toHaveBeenCalledWith(
+          InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+          'claude-opus-5',
+          false,
+        );
+
+        updateSpy.mockRestore();
+      });
+
+      it('should write without restarting the server', async () => {
+        mockPrisma.infraConfig.findMany.mockResolvedValueOnce([]);
+        const updateSpy = jest
+          .spyOn(infraConfigService, 'update')
+          .mockResolvedValue(
+            E.right(<InfraConfig>{
+              name: InfraConfigEnum.AI_MAX_TOOL_ITERATIONS,
+              value: '20',
+            }),
+          );
+
+        await infraConfigService.updateAIConfigs([
+          { name: InfraConfigEnum.AI_MAX_TOOL_ITERATIONS, value: '20' },
+        ]);
+
+        // restartEnabled must be false, otherwise every save SIGTERMs the app
+        expect(updateSpy).toHaveBeenCalledWith(
+          InfraConfigEnum.AI_MAX_TOOL_ITERATIONS,
+          '20',
+          false,
+        );
+
+        updateSpy.mockRestore();
+      });
+    });
+
+    describe('getAiChatConfig', () => {
+      it('should report disabled when credentials are incomplete', async () => {
+        jest.spyOn(infraConfigService, 'getInfraConfigsMap').mockResolvedValueOnce({
+          [InfraConfigEnum.AI_ENABLED]: 'true',
+          [InfraConfigEnum.AI_PROVIDER]: AIProvider.AZURE_FOUNDRY_ANTHROPIC,
+          [InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE]: '',
+          [InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY]: '',
+          [InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL]: 'claude-opus-5',
+        });
+
+        const result = await infraConfigService.getAiChatConfig();
+
+        expect(result.enabled).toBe(false);
+      });
+
+      it('should report enabled and never leak the API key', async () => {
+        jest.spyOn(infraConfigService, 'getInfraConfigsMap').mockResolvedValueOnce({
+          [InfraConfigEnum.AI_ENABLED]: 'true',
+          [InfraConfigEnum.AI_PROVIDER]: AIProvider.AZURE_FOUNDRY_ANTHROPIC,
+          [InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE]: 'demo.azure.anthropic.com',
+          [InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY]: 'super-secret-key',
+          [InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL]: 'claude-opus-5',
+          [InfraConfigEnum.AI_MCP_ENABLED]: 'true',
+        });
+
+        const result = await infraConfigService.getAiChatConfig();
+
+        expect(result.enabled).toBe(true);
+        expect(result.mcpEnabled).toBe(true);
+        expect(result.defaultModel).toBe('claude-opus-5');
+        expect(JSON.stringify(result)).not.toContain('super-secret-key');
+      });
     });
   });
 });

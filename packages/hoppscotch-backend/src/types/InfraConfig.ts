@@ -61,4 +61,71 @@ export enum InfraConfigEnum {
   USER_HISTORY_STORE_ENABLED = 'USER_HISTORY_STORE_ENABLED',
 
   MOCK_SERVER_WILDCARD_DOMAIN = 'MOCK_SERVER_WILDCARD_DOMAIN',
+
+  // AI / LLM provider configuration (Azure AI Foundry).
+  // These are excluded from the generic `updateInfraConfigs` mutation and are
+  // written through `updateAIConfigs` instead, so saving them does not restart
+  // the server. See InfraConfigService.EXCLUDE_FROM_UPDATE_CONFIGS.
+  AI_ENABLED = 'AI_ENABLED',
+  AI_PROVIDER = 'AI_PROVIDER',
+
+  AI_AZURE_FOUNDRY_RESOURCE = 'AI_AZURE_FOUNDRY_RESOURCE',
+  AI_AZURE_FOUNDRY_API_KEY = 'AI_AZURE_FOUNDRY_API_KEY',
+  AI_AZURE_FOUNDRY_MODEL = 'AI_AZURE_FOUNDRY_MODEL',
+
+  AI_AZURE_OPENAI_ENDPOINT = 'AI_AZURE_OPENAI_ENDPOINT',
+  AI_AZURE_OPENAI_API_KEY = 'AI_AZURE_OPENAI_API_KEY',
+  AI_AZURE_OPENAI_DEPLOYMENT = 'AI_AZURE_OPENAI_DEPLOYMENT',
+  AI_AZURE_OPENAI_API_VERSION = 'AI_AZURE_OPENAI_API_VERSION',
+
+  AI_MAX_OUTPUT_TOKENS = 'AI_MAX_OUTPUT_TOKENS',
+  AI_MAX_TOOL_ITERATIONS = 'AI_MAX_TOOL_ITERATIONS',
+  AI_ENABLE_THINKING = 'AI_ENABLE_THINKING',
+
+  AI_MCP_ENABLED = 'AI_MCP_ENABLED',
+
+  // Outbound request execution used by the agent's run-request tools.
+  AGENT_REQUEST_EXECUTION_ENABLED = 'AGENT_REQUEST_EXECUTION_ENABLED',
+  AGENT_REQUEST_ALLOWED_HOSTS = 'AGENT_REQUEST_ALLOWED_HOSTS',
+  AGENT_REQUEST_TIMEOUT_MS = 'AGENT_REQUEST_TIMEOUT_MS',
+  AGENT_REQUEST_MAX_RESPONSE_BYTES = 'AGENT_REQUEST_MAX_RESPONSE_BYTES',
 }
+
+/** LLM vendor backing the AI features. Both are served by Azure AI Foundry. */
+export enum AIProvider {
+  AZURE_FOUNDRY_ANTHROPIC = 'AZURE_FOUNDRY_ANTHROPIC',
+  AZURE_OPENAI = 'AZURE_OPENAI',
+}
+
+/** Every AI/agent config key, used to gate `updateAIConfigs`. */
+export const AI_CONFIG_KEYS = [
+  InfraConfigEnum.AI_ENABLED,
+  InfraConfigEnum.AI_PROVIDER,
+  InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE,
+  InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY,
+  InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+  InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT,
+  InfraConfigEnum.AI_AZURE_OPENAI_API_KEY,
+  InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT,
+  InfraConfigEnum.AI_AZURE_OPENAI_API_VERSION,
+  InfraConfigEnum.AI_MAX_OUTPUT_TOKENS,
+  InfraConfigEnum.AI_MAX_TOOL_ITERATIONS,
+  InfraConfigEnum.AI_ENABLE_THINKING,
+  InfraConfigEnum.AI_MCP_ENABLED,
+  InfraConfigEnum.AGENT_REQUEST_EXECUTION_ENABLED,
+  InfraConfigEnum.AGENT_REQUEST_ALLOWED_HOSTS,
+  InfraConfigEnum.AGENT_REQUEST_TIMEOUT_MS,
+  InfraConfigEnum.AGENT_REQUEST_MAX_RESPONSE_BYTES,
+] as const;
+
+/** Secret AI config keys, stored encrypted at rest. */
+export const AI_SECRET_CONFIG_KEYS: InfraConfigEnum[] = [
+  InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY,
+  InfraConfigEnum.AI_AZURE_OPENAI_API_KEY,
+];
+
+/**
+ * Placeholder the admin UI renders in place of a stored secret. An incoming
+ * value equal to this means "leave the existing value unchanged".
+ */
+export const AI_SECRET_MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';

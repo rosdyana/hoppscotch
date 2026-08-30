@@ -1,6 +1,7 @@
 import { runGQLQuery } from "@hoppscotch/common/helpers/backend/GQLClient"
 import { InfraPlatformDef } from "@hoppscotch/common/platform/infra"
 import {
+  GetAiChatConfigDocument,
   GetProxyAppUrlDocument,
   GetSmtpStatusDocument,
 } from "@app/api/generated/graphql"
@@ -20,7 +21,23 @@ const getProxyAppUrl = () => {
   })
 }
 
+const getAiChatConfig = () => {
+  return runGQLQuery({
+    query: GetAiChatConfigDocument,
+    variables: {},
+  })
+}
+
 export const InfraPlatform: InfraPlatformDef = {
+  getAiChatConfig: async () => {
+    const res = await getAiChatConfig()
+
+    if (E.isRight(res)) {
+      return E.right(res.right.aiChatConfig)
+    }
+
+    return E.left("AI_CHAT_CONFIG_FETCH_FAILED")
+  },
   getIsSMTPEnabled: async () => {
     const res = await getSMTPStatus()
 

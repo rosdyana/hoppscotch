@@ -10,6 +10,7 @@ import {
   InfraConfigArgs,
   InfraConfigEnum,
   InfraConfigsDocument,
+  UpdateAiConfigsMutation,
   ResetInfraConfigsMutation,
   ServiceStatus,
   ToggleAnalyticsCollectionMutation,
@@ -24,6 +25,8 @@ import {
   GITHUB_CONFIGS,
   GOOGLE_CONFIGS,
   MAIL_CONFIGS,
+  AI_CONFIGS,
+  AI_SECRET_MASK,
   MICROSOFT_CONFIGS,
   MOCK_SERVER_CONFIGS,
   PROXY_URL_CONFIGS,
@@ -52,7 +55,7 @@ export function useConfigHandler(updatedConfigs?: ServerConfigs) {
   } = useClientHandler(
     InfraConfigsDocument,
     {
-      configNames: ALL_CONFIGS.flat().map(
+      configNames: [...ALL_CONFIGS.flat(), ...AI_CONFIGS].map(
         ({ name }) => name
       ) as InfraConfigEnum[],
     },
@@ -211,6 +214,63 @@ export function useConfigHandler(updatedConfigs?: ServerConfigs) {
         name: 'proxy_app_url',
         fields: {
           proxy_app_url: getFieldValue(InfraConfigEnum.ProxyAppUrl),
+        },
+      },
+
+      aiConfigs: {
+        name: 'ai',
+        fields: {
+          ai_enabled: getFieldValue(InfraConfigEnum.AiEnabled),
+          ai_provider:
+            getFieldValue(InfraConfigEnum.AiProvider) ||
+            'AZURE_FOUNDRY_ANTHROPIC',
+          ai_azure_foundry_resource: getFieldValue(
+            InfraConfigEnum.AiAzureFoundryResource
+          ),
+          // A stored secret comes back masked; sending the mask back means
+          // "leave it unchanged".
+          ai_azure_foundry_api_key: getFieldValue(
+            InfraConfigEnum.AiAzureFoundryApiKey
+          )
+            ? AI_SECRET_MASK
+            : '',
+          ai_azure_foundry_model: getFieldValue(
+            InfraConfigEnum.AiAzureFoundryModel
+          ),
+          ai_azure_openai_endpoint: getFieldValue(
+            InfraConfigEnum.AiAzureOpenaiEndpoint
+          ),
+          ai_azure_openai_api_key: getFieldValue(
+            InfraConfigEnum.AiAzureOpenaiApiKey
+          )
+            ? AI_SECRET_MASK
+            : '',
+          ai_azure_openai_deployment: getFieldValue(
+            InfraConfigEnum.AiAzureOpenaiDeployment
+          ),
+          ai_azure_openai_api_version: getFieldValue(
+            InfraConfigEnum.AiAzureOpenaiApiVersion
+          ),
+          ai_max_output_tokens: getFieldValue(
+            InfraConfigEnum.AiMaxOutputTokens
+          ),
+          ai_max_tool_iterations: getFieldValue(
+            InfraConfigEnum.AiMaxToolIterations
+          ),
+          ai_enable_thinking: getFieldValue(InfraConfigEnum.AiEnableThinking),
+          ai_mcp_enabled: getFieldValue(InfraConfigEnum.AiMcpEnabled),
+          agent_request_execution_enabled: getFieldValue(
+            InfraConfigEnum.AgentRequestExecutionEnabled
+          ),
+          agent_request_allowed_hosts: getFieldValue(
+            InfraConfigEnum.AgentRequestAllowedHosts
+          ),
+          agent_request_timeout_ms: getFieldValue(
+            InfraConfigEnum.AgentRequestTimeoutMs
+          ),
+          agent_request_max_response_bytes: getFieldValue(
+            InfraConfigEnum.AgentRequestMaxResponseBytes
+          ),
         },
       },
     };
@@ -385,6 +445,38 @@ export function useConfigHandler(updatedConfigs?: ServerConfigs) {
         infraConfigs,
       },
       'configs.update_failure'
+    );
+  };
+
+  /**
+   * Save AI configuration.
+   *
+   * Uses the dedicated updateAIConfigs mutation rather than
+   * updateInfraConfigs, so saving does NOT restart the server.
+   */
+  const updateAIConfigs = (
+    updateAIConfigsMutation: UseMutationResponse<UpdateAiConfigsMutation>
+  ) => {
+    const fields = updatedConfigs?.aiConfigs?.fields;
+    if (!fields) return Promise.resolve(true);
+
+    const aiConfigs: InfraConfigArgs[] = AI_CONFIGS.map(({ name, key }) => ({
+      name,
+      value: String(fields[key as keyof typeof fields] ?? ''),
+    })).filter(
+      // An untouched, never-set secret would otherwise be written as ''.
+      ({ name, value }) =>
+        !(
+          value === '' &&
+          (name === InfraConfigEnum.AiAzureFoundryApiKey ||
+            name === InfraConfigEnum.AiAzureOpenaiApiKey)
+        )
+    );
+
+    return executeMutation(
+      updateAIConfigsMutation,
+      { aiConfigs },
+      'configs.ai.update_failure'
     );
   };
 
@@ -574,6 +666,7 @@ export function useConfigHandler(updatedConfigs?: ServerConfigs) {
     updateRateLimitConfigs,
     updateAuthTokenConfigs,
     updateInfraConfigs,
+    updateAIConfigs,
     resetInfraConfigs,
     fetchingInfraConfigs,
     fetchingAllowedAuthProviders,

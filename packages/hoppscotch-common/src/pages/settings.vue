@@ -174,6 +174,14 @@
                   {{ t("settings.enable_experimental_mock_servers") }}
                 </HoppSmartToggle>
               </div>
+              <div v-if="aiChatAvailable" class="flex items-center">
+                <HoppSmartToggle
+                  :on="ENABLE_AI_CHAT"
+                  @change="toggleSetting('ENABLE_AI_CHAT')"
+                >
+                  {{ t("settings.enable_ai_chat") }}
+                </HoppSmartToggle>
+              </div>
               <div class="flex items-center">
                 <HoppSmartToggle
                   :on="ENABLE_EXPERIMENTAL_DOCUMENTATION"
@@ -294,6 +302,7 @@ import { useI18n } from "@composables/i18n"
 import { useColorMode } from "@composables/theming"
 import { usePageHead } from "@composables/head"
 import { useService } from "dioc/vue"
+import { AiChatService } from "~/services/ai-chat.service"
 import { pipe } from "fp-ts/function"
 import * as O from "fp-ts/Option"
 import * as A from "fp-ts/Array"
@@ -336,6 +345,10 @@ const CUSTOM_NAMING_STYLE = useSetting("CUSTOM_NAMING_STYLE")
 const EXPERIMENTAL_SCRIPTING_SANDBOX = useSetting(
   "EXPERIMENTAL_SCRIPTING_SANDBOX"
 )
+const ENABLE_AI_CHAT = useSetting("ENABLE_AI_CHAT")
+const aiChat = useService(AiChatService)
+const aiChatAvailable = computed(() => aiChat.isEnabled.value)
+
 const ENABLE_EXPERIMENTAL_MOCK_SERVERS = useSetting(
   "ENABLE_EXPERIMENTAL_MOCK_SERVERS"
 )

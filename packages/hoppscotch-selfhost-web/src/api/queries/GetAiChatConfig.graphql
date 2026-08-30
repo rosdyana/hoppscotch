@@ -1,0 +1,9 @@
+query GetAiChatConfig {
+  aiChatConfig {
+    enabled
+    mcpEnabled
+    requestExecutionEnabled
+    models
+    defaultModel
+  }
+}

@@ -2,7 +2,7 @@ import { OpenAPIV2 } from "openapi-types"
 import * as O from "fp-ts/Option"
 import { pipe, flow } from "fp-ts/function"
 import * as A from "fp-ts/Array"
-import { prettyPrintJSON } from "~/helpers/functional/json"
+import { prettyPrintJSON } from "../../utils/json"
 
 type PrimitiveSchemaType = "string" | "integer" | "number" | "boolean"
 

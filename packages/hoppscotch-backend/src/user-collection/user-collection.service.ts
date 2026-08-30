@@ -1430,4 +1430,35 @@ export class UserCollectionService {
 
     return E.right(true);
   }
+  /**
+   * Search a user's own collections and requests by title.
+   *
+   * The team side has TeamCollectionService.searchByTitle; this is its
+   * personal-workspace counterpart, added for the agent tool layer.
+   */
+  async searchByTitle(searchQuery: string, userUid: string, take = 10) {
+    const query = searchQuery.trim();
+    if (query === '') return { collections: [], requests: [] };
+
+    const [collections, requests] = await Promise.all([
+      this.prisma.userCollection.findMany({
+        where: {
+          userUid,
+          title: { contains: query, mode: 'insensitive' },
+        },
+        take,
+        select: { id: true, title: true, parentID: true, type: true },
+      }),
+      this.prisma.userRequest.findMany({
+        where: {
+          userUid,
+          title: { contains: query, mode: 'insensitive' },
+        },
+        take,
+        select: { id: true, title: true, collectionID: true, type: true },
+      }),
+    ]);
+
+    return { collections, requests };
+  }
 }

@@ -1,0 +1,34 @@
+{
+  "name": "@hoppscotch/importers",
+  "version": "0.1.0",
+  "description": "Shared collection importers (Postman, Insomnia, OpenAPI, HAR, Hoppscotch) used by the app, the backend agent tools and the CLI",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "do-build-prod": "pnpm run build",
+    "do-typecheck": "tsc -p tsconfig.json --noEmit",
+    "postinstall": "pnpm run build"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "12.1.0",
+    "@hoppscotch/data": "workspace:^",
+    "fp-ts": "2.16.11",
+    "insomnia-importers": "3.6.0",
+    "js-yaml": "4.3.1",
+    "openapi-types": "12.1.3",
+    "postman-collection": "5.3.1",
+    "zod": "3.25.32",
+    "lodash": "4.17.21"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "4.0.9",
+    "typescript": "5.9.3",
+    "@types/postman-collection": "3.5.11",
+    "@types/lodash": "4.17.20"
+  }
+}

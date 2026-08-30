@@ -1,11 +1,19 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { InfraConfig } from './infra-config.model';
+import { AiChatConfig, InfraConfig } from './infra-config.model';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { InfraConfig as DBInfraConfig } from 'src/generated/prisma/client';
 import * as E from 'fp-ts/Either';
-import { InfraConfigEnum } from 'src/types/InfraConfig';
+import {
+  AI_CONFIG_KEYS,
+  AI_SECRET_CONFIG_KEYS,
+  AI_SECRET_MASK,
+  AIProvider,
+  InfraConfigEnum,
+} from 'src/types/InfraConfig';
 import { SMTPAuthType } from 'src/mailer/helper';
 import {
+  AI_CONFIG_INVALID_KEY,
+  AI_NOT_CONFIGURED,
   AUTH_PROVIDER_NOT_SPECIFIED,
   DATABASE_TABLE_NOT_EXIST,
   INFRA_CONFIG_FETCH_FAILED,
@@ -48,6 +56,14 @@ import {
 import * as crypto from 'crypto';
 import { PrismaError } from 'src/prisma/prisma-error-codes';
 
+/** A bare DNS hostname, no scheme, no path. */
+const HOSTNAME_REGEX =
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+/** An AGENT_REQUEST_ALLOWED_HOSTS entry: a hostname, optionally `*.`-prefixed, optionally `:port`. */
+const ALLOWED_HOST_PATTERN_REGEX =
+  /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:\d{1,5})?$/;
+
 @Injectable()
 export class InfraConfigService implements OnModuleInit, OnModuleDestroy {
   constructor(
@@ -65,6 +81,10 @@ export class InfraConfigService implements OnModuleInit, OnModuleDestroy {
     InfraConfigEnum.IS_FIRST_TIME_INFRA_SETUP,
     InfraConfigEnum.MAILER_SMTP_ENABLE,
     InfraConfigEnum.USER_HISTORY_STORE_ENABLED,
+    // AI/agent keys go through `updateAIConfigs`, which writes without
+    // restarting the server. Admins iterate on these, so a 30s restart per
+    // save (what `updateMany` does) would be unusable.
+    ...AI_CONFIG_KEYS,
   ];
   // Following fields can not be fetched by `infraConfigs` Query. Use dedicated queries for these fields instead.
   EXCLUDE_FROM_FETCH_CONFIGS = [
@@ -239,6 +259,161 @@ export class InfraConfigService implements OnModuleInit, OnModuleDestroy {
     } catch (e) {
       return E.left(INFRA_CONFIG_UPDATE_FAILED);
     }
+  }
+
+  /**
+   * AI availability for signed-in clients.
+   *
+   * Never returns credentials - only whether the feature is usable and which
+   * model the server will use. `enabled` is false unless the selected
+   * provider's credentials are actually present, so the client never offers a
+   * chat that would fail on first use.
+   */
+  async getAiChatConfig(): Promise<AiChatConfig> {
+    const map = await this.getInfraConfigsMap();
+
+    const provider = map[InfraConfigEnum.AI_PROVIDER] as AIProvider;
+    const isAzureOpenAI = provider === AIProvider.AZURE_OPENAI;
+
+    const required = isAzureOpenAI
+      ? [
+          InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT,
+          InfraConfigEnum.AI_AZURE_OPENAI_API_KEY,
+          InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT,
+        ]
+      : [
+          InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE,
+          InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY,
+          InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+        ];
+
+    const isConfigured = required.every((key) => (map[key] ?? '').trim() !== '');
+    const enabled = map[InfraConfigEnum.AI_ENABLED] === 'true' && isConfigured;
+
+    const defaultModel = isAzureOpenAI
+      ? (map[InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT] ?? null)
+      : (map[InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL] ?? null);
+
+    return {
+      enabled,
+      mcpEnabled: enabled && map[InfraConfigEnum.AI_MCP_ENABLED] === 'true',
+      requestExecutionEnabled:
+        enabled &&
+        map[InfraConfigEnum.AGENT_REQUEST_EXECUTION_ENABLED] === 'true',
+      models: defaultModel ? [defaultModel] : [],
+      defaultModel,
+    };
+  }
+
+  /**
+   * Update AI/agent InfraConfigs without restarting the server.
+   *
+   * These keys live in EXCLUDE_FROM_UPDATE_CONFIGS so the generic
+   * `updateInfraConfigs` mutation rejects them. Admins iterate on model choice
+   * and credentials, and `updateMany` restarts the app on every save, so this
+   * uses the non-restarting `update()` path instead.
+   *
+   * The whole batch is validated before anything is written, because the
+   * per-key loop is not transactional.
+   *
+   * @param aiConfigs AI configs to update
+   * @returns InfraConfig models
+   */
+  async updateAIConfigs(aiConfigs: InfraConfigArgs[]) {
+    // Only AI keys may be written here; anything else belongs to updateMany.
+    for (const config of aiConfigs) {
+      if (!AI_CONFIG_KEYS.includes(config.name as any))
+        return E.left(AI_CONFIG_INVALID_KEY);
+    }
+
+    // A masked secret means "leave unchanged" - drop it before validating, or
+    // the mask itself would be persisted as the credential.
+    const effective = aiConfigs.filter(
+      (config) =>
+        !(
+          AI_SECRET_CONFIG_KEYS.includes(config.name) &&
+          config.value === AI_SECRET_MASK
+        ),
+    );
+
+    const isValidate = this.validateEnvValues(effective);
+    if (E.isLeft(isValidate)) return E.left(isValidate.left);
+
+    const credentialCheck = await this.validateAiCredentialPair(effective);
+    if (E.isLeft(credentialCheck)) return E.left(credentialCheck.left);
+
+    const updated: InfraConfig[] = [];
+    for (const config of effective) {
+      const result = await this.update(config.name, config.value, false);
+      if (E.isLeft(result)) return E.left(result.left);
+      updated.push(result.right);
+    }
+
+    // LlmConfigService caches decrypted config in-process; tell it to refetch.
+    this.pubsub.publish(`infra_config/${InfraConfigEnum.AI_ENABLED}/updated`, '');
+
+    return E.right(updated);
+  }
+
+  /**
+   * Reject enabling AI without the credentials the selected provider needs.
+   *
+   * Mirrors validateSmtpCredentialPair: validateEnvValues only sees the
+   * incoming batch, so merge it with what is already in the DB to check the
+   * effective post-update state.
+   */
+  private async validateAiCredentialPair(infraConfigs: InfraConfigArgs[]) {
+    const incoming = new Map(infraConfigs.map((c) => [c.name, c.value]));
+
+    const relevant = [
+      InfraConfigEnum.AI_ENABLED,
+      InfraConfigEnum.AI_PROVIDER,
+      InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE,
+      InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY,
+      InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+      InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT,
+      InfraConfigEnum.AI_AZURE_OPENAI_API_KEY,
+      InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT,
+    ];
+
+    const missingKeys = relevant.filter((key) => !incoming.has(key));
+    const dbRows =
+      missingKeys.length === 0
+        ? []
+        : await this.prisma.infraConfig.findMany({
+            where: { name: { in: missingKeys } },
+            select: { name: true, value: true, isEncrypted: true },
+          });
+
+    const dbValues = new Map(
+      dbRows.map((row) => [
+        row.name,
+        row.value ? (row.isEncrypted ? decrypt(row.value) : row.value) : '',
+      ]),
+    );
+
+    const effective = (key: InfraConfigEnum) =>
+      (incoming.get(key) ?? dbValues.get(key) ?? '').trim();
+
+    // Only enforce completeness when AI is actually on.
+    if (effective(InfraConfigEnum.AI_ENABLED) !== 'true') return E.right(true);
+
+    const required =
+      effective(InfraConfigEnum.AI_PROVIDER) === AIProvider.AZURE_OPENAI
+        ? [
+            InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT,
+            InfraConfigEnum.AI_AZURE_OPENAI_API_KEY,
+            InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT,
+          ]
+        : [
+            InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE,
+            InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY,
+            InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+          ];
+
+    return required.every((key) => effective(key) !== '')
+      ? E.right(true)
+      : E.left(AI_NOT_CONFIGURED);
   }
 
   /**
@@ -843,6 +1018,49 @@ export class InfraConfigService implements OnModuleInit, OnModuleDestroy {
         case InfraConfigEnum.SESSION_COOKIE_NAME:
           // Allow empty to fall back to default; otherwise enforce allowed characters
           if (value && !/^[A-Za-z0-9_-]+$/.test(value)) return fail();
+          break;
+
+        case InfraConfigEnum.AI_ENABLED:
+        case InfraConfigEnum.AI_ENABLE_THINKING:
+        case InfraConfigEnum.AI_MCP_ENABLED:
+        case InfraConfigEnum.AGENT_REQUEST_EXECUTION_ENABLED:
+          if (value !== 'true' && value !== 'false') return fail();
+          break;
+
+        case InfraConfigEnum.AI_PROVIDER:
+          if (!Object.values(AIProvider).includes(value as AIProvider))
+            return fail();
+          break;
+
+        case InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE:
+          if (!value) break; // Allow empty until configured
+          // The Foundry SDK wants a bare host. A full URL is accepted here
+          // would fail opaquely at request time, so reject it up front.
+          if (value.includes('://')) return fail();
+          if (!HOSTNAME_REGEX.test(value)) return fail();
+          break;
+
+        case InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT:
+          if (value && !validateUrl(value)) return fail();
+          break;
+
+        case InfraConfigEnum.AI_MAX_OUTPUT_TOKENS:
+        case InfraConfigEnum.AI_MAX_TOOL_ITERATIONS:
+        case InfraConfigEnum.AGENT_REQUEST_TIMEOUT_MS:
+        case InfraConfigEnum.AGENT_REQUEST_MAX_RESPONSE_BYTES:
+          if (!Number.isInteger(Number(value)) || Number(value) < 1)
+            return fail();
+          break;
+
+        case InfraConfigEnum.AGENT_REQUEST_ALLOWED_HOSTS:
+          if (!value) break; // Empty means "private-range block only"
+          if (
+            value
+              .split(',')
+              .map((h) => h.trim())
+              .some((h) => h === '' || !ALLOWED_HOST_PATTERN_REGEX.test(h))
+          )
+            return fail();
           break;
 
         default:

@@ -1,7 +1,7 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver, Subscription } from '@nestjs/graphql';
 import { GqlThrottlerGuard } from 'src/guards/gql-throttler.guard';
-import { InfraConfig } from './infra-config.model';
+import { AiChatConfig, InfraConfig } from './infra-config.model';
 import { InfraConfigService } from './infra-config.service';
 import { GqlAuthGuard } from 'src/guards/gql-auth.guard';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -36,6 +36,14 @@ export class InfraConfigResolver {
     const isEnabled = await this.infraConfigService.isUserHistoryEnabled();
     if (E.isLeft(isEnabled)) throwErr(isEnabled.left);
     return isEnabled.right;
+  }
+
+  @Query(() => AiChatConfig, {
+    description: 'AI chat availability and model for the current user',
+  })
+  @UseGuards(GqlAuthGuard)
+  aiChatConfig() {
+    return this.infraConfigService.getAiChatConfig();
   }
 
   @Query(() => InfraConfig, {

@@ -32,8 +32,11 @@ import IconLink2 from "~icons/lucide/link-2"
 import IconGraphql from "~icons/hopp/graphql"
 import IconGlobe from "~icons/lucide/globe"
 import IconSettings from "~icons/lucide/settings"
+import IconSparkles from "~icons/lucide/sparkles"
+import { computed } from "vue"
 import { useSetting } from "@composables/settings"
 import { useI18n } from "@composables/i18n"
+import { useAiChatVisibility } from "~/composables/aiChatVisibility"
 
 const t = useI18n()
 
@@ -42,7 +45,11 @@ const mdAndLarger = breakpoints.greater("md")
 
 const EXPAND_NAVIGATION = useSetting("EXPAND_NAVIGATION")
 
-const primaryNavigation = [
+const { isAiChatVisible } = useAiChatVisibility()
+
+// Computed rather than a constant so the AI entry can appear and disappear with
+// the admin's server-side toggle without a reload.
+const primaryNavigation = computed(() => [
   {
     target: "/",
     svg: IconLink2,
@@ -61,13 +68,23 @@ const primaryNavigation = [
     title: "navigation.realtime",
     exact: false,
   },
+  ...(isAiChatVisible.value
+    ? [
+        {
+          target: "/ai",
+          svg: IconSparkles,
+          title: "navigation.ai",
+          exact: false,
+        },
+      ]
+    : []),
   {
     target: "/settings",
     svg: IconSettings,
     title: "navigation.settings",
     exact: false,
   },
-]
+])
 </script>
 
 <style lang="scss" scoped>

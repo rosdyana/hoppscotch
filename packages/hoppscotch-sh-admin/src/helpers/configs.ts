@@ -105,6 +105,29 @@ export type ServerConfigs = {
       proxy_app_url: string;
     };
   };
+
+  aiConfigs?: {
+    name: string;
+    fields: {
+      ai_enabled: string;
+      ai_provider: string;
+      ai_azure_foundry_resource: string;
+      ai_azure_foundry_api_key: string;
+      ai_azure_foundry_model: string;
+      ai_azure_openai_endpoint: string;
+      ai_azure_openai_api_key: string;
+      ai_azure_openai_deployment: string;
+      ai_azure_openai_api_version: string;
+      ai_max_output_tokens: string;
+      ai_max_tool_iterations: string;
+      ai_enable_thinking: string;
+      ai_mcp_enabled: string;
+      agent_request_execution_enabled: string;
+      agent_request_allowed_hosts: string;
+      agent_request_timeout_ms: string;
+      agent_request_max_response_bytes: string;
+    };
+  };
 };
 
 export type UpdatedConfigs = {
@@ -355,6 +378,85 @@ export const SESSION_COOKIE_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 export const isValidSessionCookieName = (value: string): boolean =>
   SESSION_COOKIE_NAME_REGEX.test(value);
 
+/**
+ * AI/agent configuration.
+ *
+ * Deliberately NOT part of ALL_CONFIGS: those keys go through
+ * `updateInfraConfigs`, which restarts the server on every save. AI settings
+ * are written with the dedicated `updateAIConfigs` mutation instead, so admins
+ * can iterate on model and credentials without a 30-second outage.
+ */
+export const AI_CONFIGS: Config[] = [
+  { name: InfraConfigEnum.AiEnabled, key: 'ai_enabled' },
+  { name: InfraConfigEnum.AiProvider, key: 'ai_provider' },
+  {
+    name: InfraConfigEnum.AiAzureFoundryResource,
+    key: 'ai_azure_foundry_resource',
+    optional: true,
+  },
+  {
+    name: InfraConfigEnum.AiAzureFoundryApiKey,
+    key: 'ai_azure_foundry_api_key',
+    optional: true,
+    secret: true,
+  },
+  {
+    name: InfraConfigEnum.AiAzureFoundryModel,
+    key: 'ai_azure_foundry_model',
+    optional: true,
+  },
+  {
+    name: InfraConfigEnum.AiAzureOpenaiEndpoint,
+    key: 'ai_azure_openai_endpoint',
+    optional: true,
+  },
+  {
+    name: InfraConfigEnum.AiAzureOpenaiApiKey,
+    key: 'ai_azure_openai_api_key',
+    optional: true,
+    secret: true,
+  },
+  {
+    name: InfraConfigEnum.AiAzureOpenaiDeployment,
+    key: 'ai_azure_openai_deployment',
+    optional: true,
+  },
+  {
+    name: InfraConfigEnum.AiAzureOpenaiApiVersion,
+    key: 'ai_azure_openai_api_version',
+    optional: true,
+  },
+  { name: InfraConfigEnum.AiMaxOutputTokens, key: 'ai_max_output_tokens' },
+  { name: InfraConfigEnum.AiMaxToolIterations, key: 'ai_max_tool_iterations' },
+  { name: InfraConfigEnum.AiEnableThinking, key: 'ai_enable_thinking' },
+  { name: InfraConfigEnum.AiMcpEnabled, key: 'ai_mcp_enabled' },
+  {
+    name: InfraConfigEnum.AgentRequestExecutionEnabled,
+    key: 'agent_request_execution_enabled',
+  },
+  {
+    name: InfraConfigEnum.AgentRequestAllowedHosts,
+    key: 'agent_request_allowed_hosts',
+    optional: true,
+  },
+  { name: InfraConfigEnum.AgentRequestTimeoutMs, key: 'agent_request_timeout_ms' },
+  {
+    name: InfraConfigEnum.AgentRequestMaxResponseBytes,
+    key: 'agent_request_max_response_bytes',
+  },
+];
+
+/** Mirrors AI_SECRET_MASK in the backend: means "leave this secret unchanged". */
+export const AI_SECRET_MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+
+/** Mirrors the backend check: the Foundry SDK wants a bare host, not a URL. */
+export const isValidFoundryResource = (value: string): boolean =>
+  value.trim() === '' ||
+  (!value.includes('://') &&
+    /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
+      value.trim()
+    ));
+
 export const ALL_CONFIGS = [
   GOOGLE_CONFIGS,
   MICROSOFT_CONFIGS,
@@ -401,7 +503,7 @@ export const isNotValidNumber = (field: string | boolean | number): boolean => {
 // Add a field: render it and wire `isConfigFieldErrored` from `useConfigValidation()` — no edits here, the section loops are generic.
 // Add a section/tab: push from a new block below, extend `ConfigSectionId`/`ConfigTab`, and add `:indicator` in `settings.vue`.
 
-export type ConfigTab = 'auth' | 'smtp' | 'proxy' | 'rate-limit';
+export type ConfigTab = 'auth' | 'smtp' | 'proxy' | 'rate-limit' | 'ai';
 export type ConfigSubTab = 'auth-providers' | 'token';
 export type ConfigSectionId =
   | SsoAuthProviders

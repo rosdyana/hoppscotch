@@ -315,6 +315,24 @@ export class InfraResolver {
     return updatedRes.right;
   }
 
+  @Mutation(() => [InfraConfig], {
+    description:
+      'Update AI/agent configuration. Unlike updateInfraConfigs this does not restart the server.',
+  })
+  @UseGuards(GqlAuthGuard, GqlAdminGuard)
+  async updateAIConfigs(
+    @Args({
+      name: 'aiConfigs',
+      type: () => [InfraConfigArgs],
+      description: 'AI configs to update',
+    })
+    aiConfigs: InfraConfigArgs[],
+  ) {
+    const updatedRes = await this.infraConfigService.updateAIConfigs(aiConfigs);
+    if (E.isLeft(updatedRes)) throwErr(updatedRes.left);
+    return updatedRes.right;
+  }
+
   @Mutation(() => Boolean, {
     description: 'Enable or disable analytics collection',
   })

@@ -1,7 +1,7 @@
 import { AuthProvider } from 'src/auth/helper';
 import { ENV_INVALID_DATA_ENCRYPTION_KEY } from 'src/errors';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { InfraConfigEnum } from 'src/types/InfraConfig';
+import { AIProvider, InfraConfigEnum } from 'src/types/InfraConfig';
 import { SMTPAuthType } from 'src/mailer/helper';
 import { decrypt, encrypt } from 'src/utils';
 import { randomBytes } from 'crypto';
@@ -375,6 +375,98 @@ export async function getDefaultInfraConfigs(): Promise<DefaultInfraConfig[]> {
     {
       name: InfraConfigEnum.MOCK_SERVER_WILDCARD_DOMAIN,
       value: null,
+      isEncrypted: false,
+    },
+
+    // AI / LLM (Azure AI Foundry). Disabled until an admin configures it.
+    {
+      name: InfraConfigEnum.AI_ENABLED,
+      value: 'false',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_PROVIDER,
+      value: AIProvider.AZURE_FOUNDRY_ANTHROPIC,
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_FOUNDRY_RESOURCE,
+      value: null,
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_FOUNDRY_API_KEY,
+      value: null,
+      isEncrypted: true,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_FOUNDRY_MODEL,
+      value: 'claude-opus-5',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_OPENAI_ENDPOINT,
+      value: null,
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_OPENAI_API_KEY,
+      value: null,
+      isEncrypted: true,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_OPENAI_DEPLOYMENT,
+      value: null,
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_AZURE_OPENAI_API_VERSION,
+      value: '2025-04-01-preview',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_MAX_OUTPUT_TOKENS,
+      value: '8192',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_MAX_TOOL_ITERATIONS,
+      value: '20',
+      isEncrypted: false,
+    },
+    {
+      // Adaptive thinking is beta on Microsoft Foundry, so it is opt-in.
+      name: InfraConfigEnum.AI_ENABLE_THINKING,
+      value: 'false',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AI_MCP_ENABLED,
+      value: 'false',
+      isEncrypted: false,
+    },
+
+    // Outbound request execution. Off by default: this is the only feature that
+    // makes the backend issue arbitrary outbound HTTP, so it is opt-in and
+    // guarded by SsrfGuardService.
+    {
+      name: InfraConfigEnum.AGENT_REQUEST_EXECUTION_ENABLED,
+      value: 'false',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AGENT_REQUEST_ALLOWED_HOSTS,
+      value: null,
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AGENT_REQUEST_TIMEOUT_MS,
+      value: '30000',
+      isEncrypted: false,
+    },
+    {
+      name: InfraConfigEnum.AGENT_REQUEST_MAX_RESPONSE_BYTES,
+      value: '5242880',
       isEncrypted: false,
     },
   ];

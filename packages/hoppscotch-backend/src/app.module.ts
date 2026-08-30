@@ -38,6 +38,10 @@ import { PubSubModule } from './pubsub/pubsub.module';
 import { SortModule } from './orchestration/sort/sort.module';
 import { MockServerModule } from './mock-server/mock-server.module';
 import { PublishedDocsModule } from './published-docs/published-docs.module';
+import { LlmModule } from './llm/llm.module';
+import { AgentToolsModule } from './agent-tools/agent-tools.module';
+import { McpModule } from './mcp/mcp.module';
+import { AgentChatModule } from './agent-chat/agent-chat.module';
 
 @Module({
   imports: [
@@ -128,6 +132,10 @@ import { PublishedDocsModule } from './published-docs/published-docs.module';
     SortModule,
     MockServerModule,
     PublishedDocsModule,
+    LlmModule,
+    AgentToolsModule,
+    McpModule,
+    AgentChatModule,
   ],
   providers: [
     GQLComplexityPlugin,

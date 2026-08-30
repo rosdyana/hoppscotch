@@ -69,6 +69,12 @@
       <HoppSmartTab id="mock" :label="t('configs.mock_server.title')">
         <SettingsMockServerConfig v-model:config="workingConfigs" />
       </HoppSmartTab>
+      <HoppSmartTab id="ai" :label="t('configs.tabs.ai')">
+        <SettingsAIConfiguration
+          class="pb-8 px-4"
+          v-model:config="workingConfigs"
+        />
+      </HoppSmartTab>
     </HoppSmartTabs>
   </div>
 
@@ -99,6 +105,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from '~/composables/i18n';
 import { useToast } from '~/composables/toast';
 import { useConfigHandler } from '~/composables/useConfigHandler';
+import { ServerConfigs } from '~/helpers/configs';
 import {
   ConfigTab,
   getConfigValidationIssues,
@@ -124,7 +131,8 @@ type OptionTabs =
   | 'proxy'
   | 'miscellaneous'
   | 'rate-limit'
-  | 'mock';
+  | 'mock'
+  | 'ai';
 
 const selectedOptionTab = ref<OptionTabs>('auth');
 
@@ -139,11 +147,15 @@ const {
 } = useConfigHandler();
 
 // Check if the configs have been updated
-const isConfigUpdated = computed(() =>
-  currentConfigs.value && workingConfigs.value
-    ? !isEqual(currentConfigs.value, workingConfigs.value)
-    : false,
-);
+const isConfigUpdated = computed(() => {
+  if (!currentConfigs.value || !workingConfigs.value) return false;
+
+  // AI settings save through updateAIConfigs, which does not restart the
+  // server, so they must not raise the global restart-on-save bar.
+  const withoutAi = ({ aiConfigs: _ai, ...rest }: ServerConfigs) => rest;
+
+  return !isEqual(withoutAi(currentConfigs.value), withoutAi(workingConfigs.value));
+});
 
 // Gates the field-border surface so borders appear while typing, not on load.
 watch(isConfigUpdated, (edited) => (configEdited.value = edited), {
