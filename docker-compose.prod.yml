@@ -76,11 +76,18 @@ services:
         condition: service_healthy
     # Apply migrations, then hand off to the supervisor. Doing it in-process
     # means the app can never start against an unmigrated database.
+    #
+    # The retry loop matters: `depends_on` is honoured on `compose up`, but NOT
+    # when Docker's own restart policy brings this container back. So if
+    # Postgres restarts - a host reboot, an OOM kill, anything that leaves it
+    # replaying WAL - the app returns first, `migrate deploy` fails against a
+    # database still in recovery, the container exits, and the two crash-loop
+    # past each other. Waiting here instead costs nothing on a healthy start.
     command:
       [
         "sh",
         "-c",
-        "pnpm exec prisma migrate deploy && node /usr/src/app/aio_run.mjs",
+        "until pnpm exec prisma migrate deploy; do echo 'database not ready (starting up or recovering) - retrying in 5s'; sleep 5; done && node /usr/src/app/aio_run.mjs",
       ]
     volumes:
       # The webapp-server writes its ed25519 bundle signing key here. Without a

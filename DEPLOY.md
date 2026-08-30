@@ -286,6 +286,30 @@ listening. Only worry if it is still unhealthy after ~5 minutes.
 logs hoppscotch`. The migration step runs first, so a database connection problem
 shows up there before the app logs anything.
 
+**`FATAL: the database system is in recovery mode`, or `Consistent recovery
+state has not been yet reached`, repeating in a restart loop.** Postgres is
+replaying WAL after an unclean shutdown (host reboot, OOM kill, power loss). The
+app container is not the problem and no migration has run yet - it fails before
+reaching one.
+
+`depends_on: condition: service_healthy` does **not** cover this: compose honours
+it on `compose up`, but not when Docker's own `restart: unless-stopped` policy
+brings a container back. So the app returns before Postgres is accepting
+connections and the two crash-loop past each other. The app's `command` retries
+`prisma migrate deploy` every 5s for exactly this reason, so on a current image
+it waits the recovery out on its own.
+
+Check how far along the database is:
+
+```bash
+docker compose -f docker-compose.prod.yml logs db --tail=50
+```
+
+`database system is ready to accept connections` means recovery finished and the
+app will come up on its next attempt. Recovery is normally seconds to a couple of
+minutes; if the log shows no progress after ~10 minutes, the data directory may
+be damaged and you are into restore-from-backup territory.
+
 **`Database connection failed: Connection terminated due to connection timeout`,
 in a restart loop.** The `connect_timeout` in `DATABASE_URL` is in
 **milliseconds**, despite Postgres's own parameter of that name being in
