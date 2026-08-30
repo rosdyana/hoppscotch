@@ -286,6 +286,44 @@ listening. Only worry if it is still unhealthy after ~5 minutes.
 logs hoppscotch`. The migration step runs first, so a database connection problem
 shows up there before the app logs anything.
 
+**`PANIC: could not write to file "pg_logical/replorigin_checkpoint.tmp": No
+space left on device`, looping every second.** The disk is full. Nothing is
+corrupt and no data is lost - Postgres PANICs here deliberately, precisely to
+avoid writing corruption.
+
+Read the loop carefully before reaching for a repair tool: every pass logs
+`redo done ... elapsed: 0.00 s`, so WAL replay is succeeding instantly. Only the
+end-of-recovery checkpoint fails, because there is nowhere to write it. Postgres
+then reinitialises and repeats forever. This never resolves on its own, however
+long you wait.
+
+```bash
+df -h /var/lib/docker
+docker system df
+```
+
+Usually it is Docker: pulling a new release on top of an old locally-built image
+and its build cache. Safe to reclaim, biggest win first:
+
+```bash
+docker builder prune -af   # build cache
+docker image prune -af     # unused images; images in use by a container are kept
+```
+
+> **Never** run `docker system prune --volumes` or `docker compose down -v` here.
+> Both delete the `db-data` volume - the entire database. They are the first
+> thing most disk-space advice suggests, which is exactly why this warning is
+> here.
+
+If Docker is not the culprit, find what is:
+
+```bash
+du -xh --max-depth=1 / 2>/dev/null | sort -h | tail -20
+```
+
+Once there is free space Postgres completes the checkpoint and comes up on its
+own; the app follows on its next retry.
+
 **`FATAL: the database system is in recovery mode`, or `Consistent recovery
 state has not been yet reached`, repeating in a restart loop.** Postgres is
 replaying WAL after an unclean shutdown (host reboot, OOM kill, power loss). The
@@ -307,8 +345,12 @@ docker compose -f docker-compose.prod.yml logs db --tail=50
 
 `database system is ready to accept connections` means recovery finished and the
 app will come up on its next attempt. Recovery is normally seconds to a couple of
-minutes; if the log shows no progress after ~10 minutes, the data directory may
-be damaged and you are into restore-from-backup territory.
+minutes.
+
+If it never gets there, read the loop rather than waiting it out. A `PANIC` line
+names the real cause - most often a full disk (see the entry above), which no
+amount of waiting fixes. Only if replay itself stalls, with no PANIC and no
+progress, are you looking at a damaged data directory and restore-from-backup.
 
 **`Database connection failed: Connection terminated due to connection timeout`,
 in a restart loop.** The `connect_timeout` in `DATABASE_URL` is in
