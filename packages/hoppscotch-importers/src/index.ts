@@ -8,10 +8,18 @@
 export { IMPORTER_INVALID_FILE_FORMAT } from "./errors"
 export type { HoppImporterError } from "./errors"
 
-export { hoppPostmanImporter } from "./postman"
+export {
+  hoppPostmanImporter,
+  getHoppCollections,
+  replacePMVarTemplating,
+} from "./postman"
 export { postmanEnvImporter } from "./postmanEnv"
 export { harImporter } from "./har"
-export { hoppRESTImporter } from "./hopp"
+export {
+  hoppRESTImporter,
+  hoppGQLImporter,
+  validateGQLCollection,
+} from "./hopp"
 export { hoppInsomniaImporter } from "./insomnia/insomniaColl"
 export {
   insomniaEnvImporter,

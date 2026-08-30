@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "description": "Shared collection importers (Postman, Insomnia, OpenAPI, HAR, Hoppscotch) used by the app, the backend agent tools and the CLI",
   "license": "MIT",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json',JSON.stringify({type:'commonjs'}))\" && node -e \"require('fs').writeFileSync('dist/esm/package.json',JSON.stringify({type:'module'}))\"",
     "do-build-prod": "pnpm run build",
     "do-typecheck": "tsc -p tsconfig.json --noEmit",
     "postinstall": "pnpm run build"
@@ -30,5 +30,13 @@
     "@types/lodash": "4.17.25",
     "@types/postman-collection": "3.5.11",
     "typescript": "5.9.3"
+  },
+  "module": "./dist/esm/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
   }
 }

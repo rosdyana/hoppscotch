@@ -93,6 +93,11 @@ const INIT = {
 };
 
 describe('McpServerFactory', () => {
+  // These drive a real HTTP server through supertest and complete an MCP
+  // handshake, so they are slower than a unit test and can exceed Jest's 5s
+  // default when the full suite runs in parallel.
+  jest.setTimeout(30_000);
+
   let app: express.Express;
 
   beforeEach(() => {
